@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { GearSix, X } from "@phosphor-icons/react";
 import { useSettings } from "../state/SettingsContext";
 import { useProjects } from "../state/ProjectsContext";
@@ -168,8 +168,31 @@ function DialogFrame({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  // Close the dialog when the user presses the Escape key.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  // Close the dialog when the user clicks the backdrop.
+  // Clicks inside the panel keep the dialog open.
+  function handleOverlayClick(event: React.MouseEvent) {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  }
+
   return (
-    <div className="dialog-overlay" role="presentation">
+    <div
+      className="dialog-overlay"
+      role="presentation"
+      onClick={handleOverlayClick}
+    >
       <section
         className="dialog-panel"
         role="dialog"

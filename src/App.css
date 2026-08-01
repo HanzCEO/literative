@@ -856,6 +856,7 @@ body {
   justify-content: center;
   z-index: 40;
   padding: 24px;
+  cursor: pointer;
 }
 
 .dialog-panel {
@@ -867,6 +868,7 @@ body {
   border: 1px solid var(--border);
   background: var(--bg-elevated);
   overflow: hidden;
+  cursor: default;
 }
 
 .dialog-header {

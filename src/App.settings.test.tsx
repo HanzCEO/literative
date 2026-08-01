@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
@@ -161,6 +161,30 @@ describe("settings surface", () => {
     ).toBeUndefined();
   });
 
+  it("closes when the backdrop is clicked", async () => {
+    await openSettings();
+    const overlay = document.querySelector(".dialog-overlay");
+    expect(overlay).not.toBeNull();
+    fireEvent.click(overlay!);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("stays open when the panel is clicked", async () => {
+    await openSettings();
+    await userEvent.click(screen.getByLabelText("Endpoint URL"));
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("closes on the Escape key", async () => {
+    await openSettings();
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
   it("clamps parameter values on save", async () => {
     const user = userEvent.setup();
     await openSettings();
@@ -204,7 +228,6 @@ describe("settings surface", () => {
   });
 
   it("seeds new projects from the global defaults", async () => {
-    const user = userEvent.setup();
     mockedInvoke.mockResolvedValue({
       ...defaultGlobalSettings(),
       preset: "qwen_image_flash",

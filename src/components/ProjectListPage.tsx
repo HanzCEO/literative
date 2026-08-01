@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DotsThree, Files, Plus, Trash } from "@phosphor-icons/react";
 import { useProjects, type Project } from "../state/ProjectsContext";
 
@@ -13,6 +13,20 @@ export function ProjectListPage({
 }: ProjectListPageProps) {
   const { projects, activeProject, removeProject } = useProjects();
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+
+  // Close the open menu when the user presses the Escape key.
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
 
   return (
     <div className="project-page">
