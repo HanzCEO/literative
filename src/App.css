@@ -305,7 +305,7 @@ body {
   background: var(--accent);
   color: #ffffff;
   cursor: pointer;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
 [data-theme="dark"] .island-submit {
@@ -313,7 +313,13 @@ body {
 }
 
 .island-submit:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: #ffffff;
+  color: var(--accent);
+}
+
+[data-theme="dark"] .island-submit:hover:not(:disabled) {
+  background: #1a1a1f;
+  color: var(--accent);
 }
 
 .island-submit:disabled {
@@ -528,7 +534,7 @@ body {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .toolbar-button:hover:not(:disabled) {
@@ -537,15 +543,15 @@ body {
 }
 
 .toolbar-button-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-  color: #ffffff;
+  background: #ffffff;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 [data-theme="dark"] .toolbar-button-primary:hover:not(:disabled) {
-  background: #4ade80;
-  border-color: #4ade80;
-  color: #1a1a1f;
+  background: #1a1a1f;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .toolbar-button:disabled {
@@ -907,6 +913,7 @@ body {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .dialog-button:hover:not(:disabled) {
@@ -926,6 +933,18 @@ body {
 
 [data-theme="dark"] .dialog-button-primary {
   color: #1a1a1f;
+}
+
+.dialog-button-primary:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+[data-theme="dark"] .dialog-button-primary:hover:not(:disabled) {
+  background: #1a1a1f;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 select option {
