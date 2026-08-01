@@ -45,6 +45,15 @@ impl Default for GenerationParams {
     }
 }
 
+/// The UI color scheme.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    #[default]
+    Light,
+    Dark,
+}
+
 /// The full set of user-configurable application settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -53,6 +62,7 @@ pub struct AppSettings {
     pub endpoint: String,
     pub api_key: String,
     pub model: String,
+    pub theme: Theme,
     pub params: GenerationParams,
 }
 
@@ -63,6 +73,7 @@ impl Default for AppSettings {
             endpoint: "http://127.0.0.1:8000".into(),
             api_key: String::new(),
             model: String::new(),
+            theme: Theme::Light,
             params: GenerationParams::default(),
         }
     }
@@ -105,6 +116,7 @@ mod tests {
             endpoint: "http://example.com".into(),
             api_key: "secret".into(),
             model: String::new(),
+            theme: Theme::Dark,
             params: GenerationParams {
                 width: 512,
                 height: 768,
@@ -121,6 +133,29 @@ mod tests {
         assert_eq!(parsed.preset, PresetKind::StableDiffusion);
         assert_eq!(parsed.params.sampler, "DPM++ 2M Karras");
         assert_eq!(parsed.params.negative_prompt, "blurry");
+        assert_eq!(parsed.theme, Theme::Dark);
+    }
+
+    #[test]
+    fn saves_and_loads_from_file() {
+        let path = std::env::temp_dir().join(format!(
+            "literative-settings-{}.json",
+            std::process::id()
+        ));
+        let settings = AppSettings {
+            preset: PresetKind::StableDiffusion,
+            endpoint: "http://127.0.0.1:7860".into(),
+            api_key: "".into(),
+            model: "".into(),
+            theme: Theme::Dark,
+            params: GenerationParams::default(),
+        };
+        settings.save(&path).unwrap();
+        let loaded = AppSettings::load(&path).unwrap();
+        assert_eq!(loaded.preset, PresetKind::StableDiffusion);
+        assert_eq!(loaded.endpoint, "http://127.0.0.1:7860");
+        assert_eq!(loaded.theme, Theme::Dark);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

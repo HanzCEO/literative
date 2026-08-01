@@ -50,10 +50,15 @@ describe("generation flow", () => {
 
   it("sends dropped references with the prompt", async () => {
     const user = userEvent.setup();
-    mockedInvoke.mockResolvedValue({
-      dataUrl: "data:image/png;base64,xxx",
-      width: 1,
-      height: 1,
+    mockedInvoke.mockImplementation((command) => {
+      if (command === "get_app_settings") {
+        return Promise.resolve(null);
+      }
+      return Promise.resolve({
+        dataUrl: "data:image/png;base64,xxx",
+        width: 1,
+        height: 1,
+      });
     });
     render(<App />);
     dropImage();
@@ -61,7 +66,10 @@ describe("generation flow", () => {
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
     await screen.findByAltText("Generated poster");
-    const args = mockedInvoke.mock.calls[0][1] as {
+    const generateCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "generate_poster",
+    );
+    const args = generateCall![1] as {
       prompt: string;
       references: { name: string; mimeType: string }[];
     };

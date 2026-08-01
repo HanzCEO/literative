@@ -62,18 +62,44 @@ fn image_metadata(data: Vec<u8>) -> Result<serde_json::Value> {
     }))
 }
 
-/// Load settings from the platform config directory, or return defaults.
-fn load_settings(app: &tauri::AppHandle) -> Result<settings::AppSettings> {
+/// Resolve the settings file path in the platform config directory.
+fn settings_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf> {
     let dir = app
         .path()
         .app_config_dir()
         .map_err(|err| ImageCoreError::Message(err.to_string()))?;
-    let path = dir.join("settings.json");
+    Ok(dir.join("settings.json"))
+}
+
+/// Load settings from the platform config directory.
+///
+/// Returns None when no settings file exists yet.
+fn load_settings(app: &tauri::AppHandle) -> Result<Option<settings::AppSettings>> {
+    let path = settings_path(app)?;
     if path.exists() {
-        settings::AppSettings::load(&path).map_err(ImageCoreError::Message)
+        settings::AppSettings::load(&path)
+            .map(Some)
+            .map_err(ImageCoreError::Message)
     } else {
-        Ok(settings::AppSettings::default())
+        Ok(None)
     }
+}
+
+/// Return the persisted settings, or None on first run.
+#[tauri::command]
+fn get_app_settings(app: tauri::AppHandle) -> Result<Option<settings::AppSettings>> {
+    load_settings(&app)
+}
+
+/// Persist the settings to the platform config directory.
+#[tauri::command]
+fn save_app_settings(
+    app: tauri::AppHandle,
+    settings: settings::AppSettings,
+) -> Result<settings::AppSettings> {
+    let path = settings_path(&app)?;
+    settings.save(&path).map_err(ImageCoreError::Message)?;
+    Ok(settings)
 }
 
 /// Generate a poster from a prompt and optional reference images.
@@ -83,7 +109,7 @@ async fn generate_poster(
     prompt: String,
     references: Vec<ReferencePayload>,
 ) -> Result<ai_client::GenerationResult> {
-    let settings = load_settings(&app)?;
+    let settings = load_settings(&app)?.unwrap_or_default();
     let request = ai_client::GenerationRequest {
         settings,
         prompt,
@@ -123,6 +149,8 @@ pub fn run() {
             image_metadata,
             generate_poster,
             export_poster_to_file,
+            get_app_settings,
+            save_app_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

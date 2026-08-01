@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useSettings } from "../state/SettingsContext";
 
 export type Theme = "light" | "dark";
 
@@ -31,17 +32,36 @@ function getInitialTheme(): Theme {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { settings, loaded, updateSettings } = useSettings();
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+
+  // Apply the persisted theme once the settings finish loading.
+  useEffect(() => {
+    if (loaded && settings) {
+      setThemeState(settings.theme);
+    }
+  }, [loaded, settings]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  const setTheme = useCallback((next: Theme) => setThemeState(next), []);
+  const setTheme = useCallback(
+    (next: Theme) => {
+      setThemeState(next);
+      void updateSettings({ theme: next });
+    },
+    [updateSettings],
+  );
+
   const toggleTheme = useCallback(
-    () => setThemeState((current) => (current === "light" ? "dark" : "light")),
-    [],
+    () => setThemeState((current) => {
+      const next = current === "light" ? "dark" : "light";
+      void updateSettings({ theme: next });
+      return next;
+    }),
+    [updateSettings],
   );
 
   const value = useMemo(
