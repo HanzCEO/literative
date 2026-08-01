@@ -94,7 +94,7 @@ The CI workflow runs both suites on every push to the main branch and on every p
 
 ## Configure the AI backend
 
-Open the settings dialog inside the app. The default endpoint is `http://127.0.0.1:8000` with the OpenAI-compatible preset.
+Open the settings dialog inside the app. The default endpoint is `http://127.0.0.1:7860` with the Stable Diffusion endpoint type.
 
 ### Use a Stable Diffusion server
 
@@ -104,11 +104,11 @@ Start an AUTOMATIC1111 WebUI instance with the API enabled. Run this command.
 ./webui.sh --api
 ```
 
-Set the app endpoint to the server address, for example `http://127.0.0.1:7860`. Select the Stable Diffusion preset in the settings dialog.
+Set the app endpoint to the server address, for example `http://127.0.0.1:7860`. Select the Stable Diffusion endpoint type in the settings dialog.
 
 ### Use an OpenAI-compatible server
 
-Point the app at any server that implements the OpenAI images API. Set the endpoint and API key in the settings dialog.
+Point the app at any server that implements the OpenAI images API. Select the OpenAI Compatible endpoint type and set the endpoint, API key, and model in the settings dialog.
 
 ## Project structure
 
