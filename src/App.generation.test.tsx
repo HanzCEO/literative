@@ -110,6 +110,36 @@ describe("generation flow", () => {
     expect(args.references[0].mimeType).toBe("image/png");
   });
 
+  it("sends the project settings with the generation request", async () => {
+    const user = userEvent.setup();
+    mockedInvoke.mockResolvedValue({
+      dataUrl: "data:image/png;base64,xxx",
+      width: 1,
+      height: 1,
+    });
+    await openEditor();
+    await user.click(
+      screen.getByRole("button", { name: "Generation settings" }),
+    );
+    await screen.findByRole("dialog", { name: "Project settings" });
+    const steps = screen.getByLabelText("Steps");
+    await user.clear(steps);
+    await user.type(steps, "15");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await user.type(input, "poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    await screen.findByAltText("Generated poster");
+    const generateCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "generate_poster",
+    );
+    const args = generateCall![1] as { params: { steps: number } };
+    expect(args.params.steps).toBe(15);
+  });
+
   it("shows the error message when generation fails", async () => {
     const user = userEvent.setup();
     mockedInvoke.mockRejectedValue(new Error("connection refused"));

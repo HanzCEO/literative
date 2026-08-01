@@ -17,8 +17,19 @@ async function openSettings() {
   await screen.findByRole("dialog", { name: "Settings" });
 }
 
+/** Create a project through onboarding and wait for the editor. */
+async function renderEditor() {
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getAllByRole("button", { name: "New project" })[0]);
+  await user.type(screen.getByLabelText("Project name"), "Test project");
+  await user.click(screen.getByRole("button", { name: "Create project" }));
+  await screen.findByRole("textbox", { name: "Poster prompt" });
+}
+
 describe("settings surface", () => {
   beforeEach(() => {
+    localStorage.clear();
     mockedInvoke.mockReset();
     mockedInvoke.mockResolvedValue(null); // no persisted settings on first run
   });
@@ -165,6 +176,46 @@ describe("settings surface", () => {
     );
     const args = saveCall![1] as { settings: { params: { width: number } } };
     expect(args.settings.params.width).toBe(4096);
+  });
+
+  it("stores project settings with the project record", async () => {
+    const user = userEvent.setup();
+    await renderEditor();
+    await user.click(
+      screen.getByRole("button", { name: "Generation settings" }),
+    );
+    await screen.findByRole("dialog", { name: "Project settings" });
+    const steps = screen.getByLabelText("Steps");
+    await user.clear(steps);
+    await user.type(steps, "15");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      const stored = JSON.parse(
+        localStorage.getItem("literative.projects") ?? "[]",
+      ) as { settings: { preset: string; params: { steps: number } } }[];
+      expect(stored[0].settings.preset).toBe("krea_2_turbo");
+      expect(stored[0].settings.params.steps).toBe(15);
+    });
+    // Global settings are not touched by a project-scoped save.
+    const saveCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "save_app_settings",
+    );
+    expect(saveCall).toBeUndefined();
+  });
+
+  it("seeds new projects from the global defaults", async () => {
+    const user = userEvent.setup();
+    mockedInvoke.mockResolvedValue({
+      ...defaultGlobalSettings(),
+      preset: "qwen_image_flash",
+      params: { ...defaultGlobalSettings().params, steps: 20, height: 1536 },
+    });
+    await renderEditor();
+    const stored = JSON.parse(
+      localStorage.getItem("literative.projects") ?? "[]",
+    ) as { settings: { preset: string; params: { steps: number } } }[];
+    expect(stored[0].settings.preset).toBe("qwen_image_flash");
+    expect(stored[0].settings.params.steps).toBe(20);
   });
 
   it("handles a settings load failure gracefully", async () => {
