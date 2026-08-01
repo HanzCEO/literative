@@ -261,7 +261,6 @@ body {
 .island-icon-idle,
 .island-icon-hover {
   position: absolute;
-  transition: opacity 0.15s ease;
 }
 
 .island-icon-hover {
