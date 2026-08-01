@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
-import { defaultSettings } from "./state/settingsTypes";
+import { defaultGlobalSettings } from "./state/settingsTypes";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -51,7 +51,7 @@ describe("settings surface", () => {
 
   it("saves edited settings through the backend", async () => {
     const user = userEvent.setup();
-    mockedInvoke.mockResolvedValue(defaultSettings());
+    mockedInvoke.mockResolvedValue(defaultGlobalSettings());
     await openSettings();
     const endpoint = screen.getByLabelText("Endpoint URL");
     await user.clear(endpoint);
@@ -88,12 +88,12 @@ describe("settings surface", () => {
 
   it("loads persisted settings into the dialog", async () => {
     mockedInvoke.mockResolvedValue({
-      ...defaultSettings(),
+      ...defaultGlobalSettings(),
       preset: "qwen_image_flash",
       endpointType: "open_ai_compatible",
       endpoint: "http://127.0.0.1:7860",
       theme: "dark",
-      params: { ...defaultSettings().params, steps: 25 },
+      params: { ...defaultGlobalSettings().params, steps: 25 },
     });
     await openSettings();
     await waitFor(() =>
@@ -112,7 +112,7 @@ describe("settings surface", () => {
 
   it("applies the persisted dark theme from settings", async () => {
     mockedInvoke.mockResolvedValue({
-      ...defaultSettings(),
+      ...defaultGlobalSettings(),
       theme: "dark",
     });
     render(<App />);

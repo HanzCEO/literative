@@ -59,8 +59,8 @@ impl Default for GenerationParams {
     fn default() -> Self {
         Self {
             width: 1024,
-            height: 1536,
-            steps: 30,
+            height: 1024,
+            steps: 8,
             strength: 0.6,
             cfg_scale: 7.0,
             sampler: "Euler a".into(),

@@ -15,7 +15,11 @@ export interface GenerationParams {
   negativePrompt: string;
 }
 
-export interface AppSettings {
+/**
+ * App-level settings shared by every project.
+ * The preset and params act as defaults for new projects.
+ */
+export interface GlobalSettings {
   preset: PresetKind;
   endpointType: EndpointTypeKind;
   endpoint: string;
@@ -25,11 +29,17 @@ export interface AppSettings {
   params: GenerationParams;
 }
 
+/** Generation settings stored on a single project. */
+export interface ProjectSettings {
+  preset: PresetKind;
+  params: GenerationParams;
+}
+
 export function defaultParams(): GenerationParams {
   return {
     width: 1024,
-    height: 1536,
-    steps: 30,
+    height: 1024,
+    steps: 8,
     strength: 0.6,
     cfgScale: 7.0,
     sampler: "Euler a",
@@ -56,7 +66,7 @@ export const PRESET_PARAMS: Record<PresetKind, GenerationParams> = {
   },
 };
 
-export function defaultSettings(): AppSettings {
+export function defaultGlobalSettings(): GlobalSettings {
   return {
     preset: "krea_2_turbo",
     endpointType: "stable_diffusion",
@@ -64,6 +74,14 @@ export function defaultSettings(): AppSettings {
     apiKey: "",
     model: "",
     theme: "light",
+    params: { ...PRESET_PARAMS.krea_2_turbo },
+  };
+}
+
+/** Fallback project settings for projects without stored settings. */
+export function defaultProjectSettings(): ProjectSettings {
+  return {
+    preset: "krea_2_turbo",
     params: { ...PRESET_PARAMS.krea_2_turbo },
   };
 }

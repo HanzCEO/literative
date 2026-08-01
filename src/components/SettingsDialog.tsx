@@ -2,9 +2,9 @@ import { useState, type FormEvent } from "react";
 import { GearSix, X } from "@phosphor-icons/react";
 import { useSettings } from "../state/SettingsContext";
 import {
-  defaultSettings,
+  defaultGlobalSettings,
   PRESET_PARAMS,
-  type AppSettings,
+  type GlobalSettings,
   type EndpointTypeKind,
   type PresetKind,
 } from "../state/settingsTypes";
@@ -15,18 +15,18 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ onClose }: SettingsDialogProps) {
   const { settings, updateSettings } = useSettings();
-  const [draft, setDraft] = useState<AppSettings>(() => ({
-    ...(settings ?? defaultSettings()),
-    params: { ...(settings?.params ?? defaultSettings().params) },
+  const [draft, setDraft] = useState<GlobalSettings>(() => ({
+    ...(settings ?? defaultGlobalSettings()),
+    params: { ...(settings?.params ?? defaultGlobalSettings().params) },
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function patch(patch: Partial<AppSettings>) {
+  function patch(patch: Partial<GlobalSettings>) {
     setDraft((current) => ({ ...current, ...patch }));
   }
 
-  function patchParams(patch: Partial<AppSettings["params"]>) {
+  function patchParams(patch: Partial<GlobalSettings["params"]>) {
     setDraft((current) => ({
       ...current,
       params: { ...current.params, ...patch },
@@ -47,8 +47,8 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
         params: {
           ...draft.params,
           width: clampInt(draft.params.width, 256, 4096, 1024),
-          height: clampInt(draft.params.height, 256, 4096, 1536),
-          steps: clampInt(draft.params.steps, 1, 200, 30),
+          height: clampInt(draft.params.height, 256, 4096, 1024),
+          steps: clampInt(draft.params.steps, 1, 200, 8),
           strength: clamp01(draft.params.strength),
           cfgScale: clamp01(draft.params.cfgScale),
           n: clampInt(draft.params.n, 1, 8, 1),

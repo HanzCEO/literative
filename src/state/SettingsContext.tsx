@@ -9,22 +9,22 @@ import {
   type ReactNode,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { defaultSettings, type AppSettings } from "./settingsTypes";
+import { defaultGlobalSettings, type GlobalSettings } from "./settingsTypes";
 
 interface SettingsContextValue {
   /** The persisted settings, or null before they load. */
-  settings: AppSettings | null;
+  settings: GlobalSettings | null;
   /** True after the first load attempt finishes. */
   loaded: boolean;
   error: string | null;
-  updateSettings: (patch: Partial<AppSettings>) => Promise<void>;
+  updateSettings: (patch: Partial<GlobalSettings>) => Promise<void>;
   reload: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
@@ -35,7 +35,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
     inFlight.current = true;
     try {
-      const stored = await invoke<AppSettings | null>("get_app_settings");
+      const stored = await invoke<GlobalSettings | null>("get_app_settings");
       setSettings(stored);
       setError(null);
     } catch (err) {
@@ -53,11 +53,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const updateSettings = useCallback(
-    async (patch: Partial<AppSettings>) => {
-      const merged: AppSettings = { ...(settings ?? defaultSettings()), ...patch };
+    async (patch: Partial<GlobalSettings>) => {
+      const merged: GlobalSettings = { ...(settings ?? defaultGlobalSettings()), ...patch };
       setSettings(merged);
       try {
-        await invoke<AppSettings>("save_app_settings", { settings: merged });
+        await invoke<GlobalSettings>("save_app_settings", { settings: merged });
         setError(null);
       } catch (err) {
         setError(typeof err === "string" ? err : "Failed to save settings");

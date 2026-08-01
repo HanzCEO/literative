@@ -97,6 +97,7 @@
 }
 
 :root {
+  --header-height: 62px;
   --bg: #f7f7f8;
   --bg-elevated: #ffffff;
   --bg-hover: #f0f0f3;
@@ -209,7 +210,7 @@ body {
   align-items: center;
   justify-content: center;
   /* Reserve space for the fixed app header. */
-  padding-top: 62px;
+  padding-top: var(--header-height);
 }
 
 .canvas-hint {
@@ -1017,10 +1018,13 @@ select option {
 
 .project-page {
   width: min(760px, calc(100vw - 64px));
-  max-height: 100%;
+  height: calc(100vh - var(--header-height));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  /* safe center keeps the top reachable on overflow. Older WebKit ignores it. */
+  justify-content: safe center;
   gap: 20px;
   padding: 12px 0;
 }
