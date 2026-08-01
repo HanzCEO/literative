@@ -1,7 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { GearSix, X } from "@phosphor-icons/react";
 import { useSettings } from "../state/SettingsContext";
-import { defaultSettings, type AppSettings } from "../state/settingsTypes";
+import {
+  defaultSettings,
+  PRESET_PARAMS,
+  type AppSettings,
+  type EndpointTypeKind,
+  type PresetKind,
+} from "../state/settingsTypes";
 
 interface SettingsDialogProps {
   onClose: () => void;
@@ -34,6 +40,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
     try {
       await updateSettings({
         preset: draft.preset,
+        endpointType: draft.endpointType,
         endpoint: draft.endpoint.trim(),
         apiKey: draft.apiKey,
         model: draft.model.trim(),
@@ -84,19 +91,32 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
               <span className="dialog-label">Preset</span>
               <select
                 value={draft.preset}
+                onChange={(event) => {
+                  const preset = event.target.value as PresetKind;
+                  patch({
+                    preset,
+                    params: { ...PRESET_PARAMS[preset] },
+                  });
+                }}
+                aria-label="Generation preset"
+              >
+                <option value="krea_2_turbo">Krea 2 Turbo</option>
+                <option value="qwen_image_flash">Qwen Image Flash</option>
+              </select>
+            </label>
+            <label className="dialog-field">
+              <span className="dialog-label">Endpoint type</span>
+              <select
+                value={draft.endpointType}
                 onChange={(event) =>
                   patch({
-                    preset: event.target.value as AppSettings["preset"],
+                    endpointType: event.target.value as EndpointTypeKind,
                   })
                 }
-                aria-label="API preset"
+                aria-label="Endpoint type"
               >
-                <option value="open_ai_compatible">
-                  OpenAI compatible
-                </option>
-                <option value="stable_diffusion">
-                  Stable Diffusion (AUTOMATIC1111)
-                </option>
+                <option value="stable_diffusion">Stable Diffusion</option>
+                <option value="open_ai_compatible">OpenAI Compatible</option>
               </select>
             </label>
             <label className="dialog-field">

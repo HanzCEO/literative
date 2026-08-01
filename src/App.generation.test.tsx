@@ -10,6 +10,16 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 const mockedInvoke = vi.mocked(invoke);
 
+/** Create a project through onboarding and wait for the editor. */
+async function openEditor() {
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getAllByRole("button", { name: "New project" })[0]);
+  await user.type(screen.getByLabelText("Project name"), "Test project");
+  await user.click(screen.getByRole("button", { name: "Create project" }));
+  await screen.findByRole("textbox", { name: "Poster prompt" });
+}
+
 function dropImage() {
   const island = screen.getByTestId("floating-island");
   const file = new File(["fake-image-bytes"], "mood.png", {
@@ -30,7 +40,7 @@ describe("generation flow", () => {
       width: 1024,
       height: 1024,
     });
-    render(<App />);
+    await openEditor();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "A neon jazz poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
@@ -60,7 +70,7 @@ describe("generation flow", () => {
         height: 1,
       });
     });
-    render(<App />);
+    await openEditor();
     dropImage();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
@@ -81,7 +91,7 @@ describe("generation flow", () => {
   it("shows the error message when generation fails", async () => {
     const user = userEvent.setup();
     mockedInvoke.mockRejectedValue(new Error("connection refused"));
-    render(<App />);
+    await openEditor();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
@@ -98,7 +108,7 @@ describe("generation flow", () => {
       width: 512,
       height: 512,
     });
-    render(<App />);
+    await openEditor();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
@@ -118,7 +128,7 @@ describe("generation flow", () => {
           resolveInvoke = resolve;
         }),
     );
-    render(<App />);
+    await openEditor();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));

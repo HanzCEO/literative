@@ -25,14 +25,28 @@ describe("settings surface", () => {
 
   it("shows defaults in the dialog on first run", async () => {
     await openSettings();
-    expect(screen.getByLabelText("Endpoint URL")).toHaveValue(
-      "http://127.0.0.1:8000",
+    expect(screen.getByLabelText("Generation preset")).toHaveValue(
+      "krea_2_turbo",
     );
-    expect(screen.getByLabelText("API preset")).toHaveValue(
-      "open_ai_compatible",
+    expect(screen.getByLabelText("Endpoint type")).toHaveValue(
+      "stable_diffusion",
+    );
+    expect(screen.getByLabelText("Endpoint URL")).toHaveValue(
+      "http://127.0.0.1:7860",
     );
     expect(screen.getByLabelText("Width")).toHaveValue(1024);
-    expect(screen.getByLabelText("Steps")).toHaveValue(30);
+    expect(screen.getByLabelText("Steps")).toHaveValue(8);
+  });
+
+  it("fills parameters when the preset changes", async () => {
+    const user = userEvent.setup();
+    await openSettings();
+    await user.selectOptions(
+      screen.getByLabelText("Generation preset"),
+      "qwen_image_flash",
+    );
+    expect(screen.getByLabelText("Steps")).toHaveValue(20);
+    expect(screen.getByLabelText("Height")).toHaveValue(1536);
   });
 
   it("saves edited settings through the backend", async () => {
@@ -43,8 +57,12 @@ describe("settings surface", () => {
     await user.clear(endpoint);
     await user.type(endpoint, "http://127.0.0.1:7860");
     await user.selectOptions(
-      screen.getByLabelText("API preset"),
-      "stable_diffusion",
+      screen.getByLabelText("Generation preset"),
+      "qwen_image_flash",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Endpoint type"),
+      "open_ai_compatible",
     );
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
@@ -54,24 +72,37 @@ describe("settings surface", () => {
       (call) => call[0] === "save_app_settings",
     );
     expect(saveCall).toBeDefined();
-    const args = saveCall![1] as { settings: { preset: string; endpoint: string } };
-    expect(args.settings.preset).toBe("stable_diffusion");
+    const args = saveCall![1] as {
+      settings: {
+        preset: string;
+        endpointType: string;
+        endpoint: string;
+        params: { steps: number };
+      };
+    };
+    expect(args.settings.preset).toBe("qwen_image_flash");
+    expect(args.settings.endpointType).toBe("open_ai_compatible");
     expect(args.settings.endpoint).toBe("http://127.0.0.1:7860");
+    expect(args.settings.params.steps).toBe(20);
   });
 
   it("loads persisted settings into the dialog", async () => {
     mockedInvoke.mockResolvedValue({
       ...defaultSettings(),
-      preset: "stable_diffusion",
+      preset: "qwen_image_flash",
+      endpointType: "open_ai_compatible",
       endpoint: "http://127.0.0.1:7860",
       theme: "dark",
       params: { ...defaultSettings().params, steps: 25 },
     });
     await openSettings();
     await waitFor(() =>
-      expect(screen.getByLabelText("API preset")).toHaveValue(
-        "stable_diffusion",
+      expect(screen.getByLabelText("Generation preset")).toHaveValue(
+        "qwen_image_flash",
       ),
+    );
+    expect(screen.getByLabelText("Endpoint type")).toHaveValue(
+      "open_ai_compatible",
     );
     expect(screen.getByLabelText("Endpoint URL")).toHaveValue(
       "http://127.0.0.1:7860",
@@ -139,9 +170,9 @@ describe("settings surface", () => {
   it("handles a settings load failure gracefully", async () => {
     mockedInvoke.mockRejectedValue(new Error("no config dir"));
     render(<App />);
-    // The app still renders with defaults.
+    // The app still renders with defaults on the project list.
     expect(
-      screen.getByRole("textbox", { name: "Poster prompt" }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: "New project" }).length,
+    ).toBeGreaterThan(0);
   });
 });

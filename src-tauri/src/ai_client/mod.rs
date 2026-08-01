@@ -10,7 +10,7 @@ pub mod stable_diffusion;
 use serde::{Deserialize, Serialize};
 
 use crate::image_core::{self, ImageCoreError, Result};
-use crate::settings::{AppSettings, PresetKind};
+use crate::settings::{AppSettings, EndpointType};
 
 /// A reference image sent with the prompt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,8 +67,8 @@ pub fn decode_base64(data: &str) -> Result<Vec<u8>> {
 
 /// Run a generation against the configured endpoint.
 pub async fn generate(request: GenerationRequest) -> Result<GenerationResult> {
-    match request.settings.preset {
-        PresetKind::OpenAiCompatible => openai::generate(&request).await,
-        PresetKind::StableDiffusion => stable_diffusion::generate(&request).await,
+    match request.settings.endpoint_type {
+        EndpointType::StableDiffusion => stable_diffusion::generate(&request).await,
+        EndpointType::OpenAiCompatible => openai::generate(&request).await,
     }
 }

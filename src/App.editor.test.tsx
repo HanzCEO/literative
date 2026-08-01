@@ -15,13 +15,29 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 const mockedInvoke = vi.mocked(invoke);
 const mockedSave = vi.mocked(save);
 
+/** Create a project through onboarding and wait for the editor. */
+async function openEditor() {
+  render(<App />);
+  await userEvent.click(
+    screen.getAllByRole("button", { name: "New project" })[0],
+  );
+  await userEvent.type(
+    screen.getByLabelText("Project name"),
+    "Test project",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Create project" }),
+  );
+  await screen.findByRole("textbox", { name: "Poster prompt" });
+}
+
 async function enterEditor() {
   mockedInvoke.mockResolvedValue({
     dataUrl: "data:image/png;base64,cG9zdGVy",
     width: 800,
     height: 600,
   });
-  render(<App />);
+  await openEditor();
   const input = screen.getByRole("textbox", { name: "Poster prompt" });
   await userEvent.type(input, "a poster");
   await userEvent.click(screen.getByRole("button", { name: "Generate poster" }));

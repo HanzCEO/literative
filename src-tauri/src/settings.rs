@@ -5,15 +5,40 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// A named bundle of generation parameters.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PresetKind {
+    /// Krea 2 Turbo generation settings.
+    #[default]
+    Krea2Turbo,
+    /// Qwen Image Flash generation settings.
+    QwenImageFlash,
+}
+
+/// Deserialize a preset, falling back to the default for unknown values.
+impl<'de> Deserialize<'de> for PresetKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = Option::<String>::deserialize(deserializer)?;
+        Ok(match value.as_deref() {
+            Some("qwen_image_flash") => PresetKind::QwenImageFlash,
+            _ => PresetKind::Krea2Turbo,
+        })
+    }
+}
+
 /// The schema used to talk to the image API.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum PresetKind {
-    /// An OpenAI-compatible images API.
-    #[default]
-    OpenAiCompatible,
+pub enum EndpointType {
     /// A Stable Diffusion style API (AUTOMATIC1111).
+    #[default]
     StableDiffusion,
+    /// An OpenAI-compatible images API.
+    OpenAiCompatible,
 }
 
 /// Fine-tuning parameters for image generation.
@@ -59,6 +84,7 @@ pub enum Theme {
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
     pub preset: PresetKind,
+    pub endpoint_type: EndpointType,
     pub endpoint: String,
     pub api_key: String,
     pub model: String,
@@ -69,8 +95,9 @@ pub struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            preset: PresetKind::OpenAiCompatible,
-            endpoint: "http://127.0.0.1:8000".into(),
+            preset: PresetKind::Krea2Turbo,
+            endpoint_type: EndpointType::StableDiffusion,
+            endpoint: "http://127.0.0.1:7860".into(),
             api_key: String::new(),
             model: String::new(),
             theme: Theme::Light,
@@ -104,15 +131,17 @@ mod tests {
     #[test]
     fn defaults_are_sane() {
         let settings = AppSettings::default();
-        assert_eq!(settings.preset, PresetKind::OpenAiCompatible);
+        assert_eq!(settings.preset, PresetKind::Krea2Turbo);
+        assert_eq!(settings.endpoint_type, EndpointType::StableDiffusion);
         assert_eq!(settings.params.width, 1024);
-        assert!(settings.params.steps >= 10);
+        assert!(settings.params.steps >= 1);
     }
 
     #[test]
     fn round_trips_through_json() {
         let settings = AppSettings {
-            preset: PresetKind::StableDiffusion,
+            preset: PresetKind::QwenImageFlash,
+            endpoint_type: EndpointType::OpenAiCompatible,
             endpoint: "http://example.com".into(),
             api_key: "secret".into(),
             model: String::new(),
@@ -129,8 +158,11 @@ mod tests {
             },
         };
         let json = serde_json::to_string(&settings).unwrap();
+        assert!(json.contains("\"qwen_image_flash\""));
+        assert!(json.contains("\"open_ai_compatible\""));
         let parsed: AppSettings = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.preset, PresetKind::StableDiffusion);
+        assert_eq!(parsed.preset, PresetKind::QwenImageFlash);
+        assert_eq!(parsed.endpoint_type, EndpointType::OpenAiCompatible);
         assert_eq!(parsed.params.sampler, "DPM++ 2M Karras");
         assert_eq!(parsed.params.negative_prompt, "blurry");
         assert_eq!(parsed.theme, Theme::Dark);
@@ -143,7 +175,8 @@ mod tests {
             std::process::id()
         ));
         let settings = AppSettings {
-            preset: PresetKind::StableDiffusion,
+            preset: PresetKind::Krea2Turbo,
+            endpoint_type: EndpointType::StableDiffusion,
             endpoint: "http://127.0.0.1:7860".into(),
             api_key: "".into(),
             model: "".into(),
@@ -152,7 +185,8 @@ mod tests {
         };
         settings.save(&path).unwrap();
         let loaded = AppSettings::load(&path).unwrap();
-        assert_eq!(loaded.preset, PresetKind::StableDiffusion);
+        assert_eq!(loaded.preset, PresetKind::Krea2Turbo);
+        assert_eq!(loaded.endpoint_type, EndpointType::StableDiffusion);
         assert_eq!(loaded.endpoint, "http://127.0.0.1:7860");
         assert_eq!(loaded.theme, Theme::Dark);
         let _ = std::fs::remove_file(&path);
@@ -161,7 +195,15 @@ mod tests {
     #[test]
     fn loads_with_defaults_when_fields_are_missing() {
         let parsed: AppSettings = serde_json::from_str("{}").unwrap();
-        assert_eq!(parsed.preset, PresetKind::OpenAiCompatible);
-        assert_eq!(parsed.endpoint, "http://127.0.0.1:8000");
+        assert_eq!(parsed.preset, PresetKind::Krea2Turbo);
+        assert_eq!(parsed.endpoint_type, EndpointType::StableDiffusion);
+        assert_eq!(parsed.endpoint, "http://127.0.0.1:7860");
+    }
+
+    #[test]
+    fn legacy_preset_values_fall_back_to_default() {
+        let parsed: AppSettings =
+            serde_json::from_str("{ \"preset\": \"open_ai_compatible\" }").unwrap();
+        assert_eq!(parsed.preset, PresetKind::Krea2Turbo);
     }
 }

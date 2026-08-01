@@ -4,9 +4,19 @@ import userEvent from "@testing-library/user-event";
 import App from "./App";
 
 describe("App shell", () => {
-  it("renders the brand name", () => {
+  it("starts on the project list page", () => {
     render(<App />);
-    expect(screen.getByText("Literative")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Projects" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "New project" }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("does not show the brand text", () => {
+    render(<App />);
+    expect(screen.queryByText("Literative")).not.toBeInTheDocument();
   });
 
   it("toggles between light and dark theme", async () => {
