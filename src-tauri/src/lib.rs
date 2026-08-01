@@ -1,6 +1,10 @@
+pub mod ai_client;
 pub mod image_core;
+pub mod settings;
 
-use image_core::{FilterKind, Result};
+use ai_client::ReferencePayload;
+use image_core::{ImageCoreError, Result};
+use tauri::Manager;
 
 /// Decode image bytes and return a downscaled PNG preview as a data URL.
 ///
@@ -22,7 +26,7 @@ fn image_resize(data: Vec<u8>, width: u32, height: u32) -> Result<Vec<u8>> {
 
 /// Apply a filter to image bytes and return PNG data.
 #[tauri::command]
-fn image_apply_filter(data: Vec<u8>, filter: FilterKind) -> Result<Vec<u8>> {
+fn image_apply_filter(data: Vec<u8>, filter: image_core::FilterKind) -> Result<Vec<u8>> {
     let img = image_core::io::decode(&data)?;
     let out = image_core::filters::apply_filter(&img, &filter)?;
     image_core::io::encode_png(&out)
@@ -57,8 +61,39 @@ fn image_metadata(data: Vec<u8>) -> Result<serde_json::Value> {
     }))
 }
 
+/// Load settings from the platform config directory, or return defaults.
+fn load_settings(app: &tauri::AppHandle) -> Result<settings::AppSettings> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|err| ImageCoreError::Message(err.to_string()))?;
+    let path = dir.join("settings.json");
+    if path.exists() {
+        settings::AppSettings::load(&path).map_err(ImageCoreError::Message)
+    } else {
+        Ok(settings::AppSettings::default())
+    }
+}
+
+/// Generate a poster from a prompt and optional reference images.
+#[tauri::command]
+async fn generate_poster(
+    app: tauri::AppHandle,
+    prompt: String,
+    references: Vec<ReferencePayload>,
+) -> Result<ai_client::GenerationResult> {
+    let settings = load_settings(&app)?;
+    let request = ai_client::GenerationRequest {
+        settings,
+        prompt,
+        references,
+    };
+    ai_client::generate(request).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {    tauri::Builder::default()
+pub fn run() {
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             image_preview,
@@ -67,6 +102,7 @@ pub fn run() {    tauri::Builder::default()
             image_export_png,
             image_export_jpeg,
             image_metadata,
+            generate_poster,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -94,7 +130,7 @@ mod tests {
 
     #[test]
     fn filter_command_returns_png() {
-        let out = image_apply_filter(png_bytes(), FilterKind::Grayscale).unwrap();
+        let out = image_apply_filter(png_bytes(), image_core::FilterKind::Grayscale).unwrap();
         assert_eq!(&out[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
     }
 

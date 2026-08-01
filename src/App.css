@@ -247,3 +247,69 @@ body {
     transform: rotate(360deg);
   }
 }
+
+.canvas-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  max-width: 100%;
+}
+
+.generation-error {
+  color: #dc2626;
+  font-size: 13px;
+  text-align: center;
+  margin: 0;
+  max-width: 560px;
+  overflow-wrap: anywhere;
+}
+
+.result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(560px, 90vw);
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.result-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.result-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.result-dismiss:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.result-image {
+  width: 100%;
+  border-radius: 10px;
+  display: block;
+}
