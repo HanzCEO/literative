@@ -36,7 +36,10 @@ beforeEach(() => {
 function renderIsland(onGenerate: (prompt: string) => void = vi.fn()) {
   return render(
     <MoodboardProvider>
-      <FloatingIsland onGenerate={onGenerate} />
+      <FloatingIsland
+        onGenerate={onGenerate}
+        onOpenSettings={vi.fn()}
+      />
     </MoodboardProvider>,
   );
 }

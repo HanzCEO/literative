@@ -30,6 +30,7 @@ function Shell() {
   const [result, setResult] = useState<GeneratedPoster | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [backHovered, setBackHovered] = useState(false);
 
   function resetGeneration() {
@@ -190,13 +191,25 @@ function Shell() {
                     {error}
                   </p>
                 )}
-                <FloatingIsland busy={generating} onGenerate={handleGenerate} />
+                <FloatingIsland
+                  busy={generating}
+                  onGenerate={handleGenerate}
+                  onOpenSettings={() => setProjectSettingsOpen(true)}
+                />
               </div>
             )}
           </>
         )}
       </main>
-      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsDialog scope="global" onClose={() => setSettingsOpen(false)} />
+      )}
+      {projectSettingsOpen && (
+        <SettingsDialog
+          scope="project"
+          onClose={() => setProjectSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

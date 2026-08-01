@@ -9,6 +9,7 @@ import {
   CircleNotch,
   ImageSquare,
   Plus,
+  Sliders,
   X,
 } from "@phosphor-icons/react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -38,11 +39,14 @@ interface FloatingIslandProps {
   busy?: boolean;
   /** Called with the trimmed prompt when the user submits. */
   onGenerate: (prompt: string) => void;
+  /** Opens the settings for the active project. */
+  onOpenSettings: () => void;
 }
 
 export function FloatingIsland({
   busy = false,
   onGenerate,
+  onOpenSettings,
 }: FloatingIslandProps) {
   const { references, addFiles, removeReference } = useMoodboard();
   const [prompt, setPrompt] = useState("");
@@ -193,6 +197,14 @@ export function FloatingIsland({
             className="island-icon-idle"
           />
           <Plus size={22} weight="bold" className="island-icon-hover" />
+        </button>
+        <button
+          type="button"
+          className="island-icon-button"
+          aria-label="Generation settings"
+          onClick={onOpenSettings}
+        >
+          <Sliders size={20} weight="duotone" />
         </button>
         <input
           className="island-input"

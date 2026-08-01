@@ -927,6 +927,12 @@ body {
   color: var(--text-muted);
 }
 
+.dialog-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .dialog-field {
   display: flex;
   flex-direction: column;
