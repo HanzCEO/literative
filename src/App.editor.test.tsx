@@ -56,7 +56,8 @@ describe("poster editor", () => {
     await enterEditor();
     expect(screen.getByTestId("poster-canvas")).toBeInTheDocument();
     expect(screen.getByText("Generated poster")).toBeInTheDocument();
-    expect(screen.getByText("800 x 600 px")).toBeInTheDocument();
+    // The document uses the project poster size, not the image size.
+    expect(screen.getByText("1024 x 1536 px")).toBeInTheDocument();
   });
 
   it("adds and edits a text layer", async () => {

@@ -1145,3 +1145,83 @@ select option {
   gap: 14px;
   max-width: 480px;
 }
+
+.poster-size-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.poster-size-section legend {
+  padding: 0;
+  margin-bottom: 2px;
+}
+
+.size-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.size-input-wrap input {
+  width: 100%;
+  padding-right: 30px;
+}
+
+.size-input-unit {
+  position: absolute;
+  right: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.poster-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.poster-preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.poster-preset-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.poster-preset-card-active,
+.poster-preset-card-active:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.poster-preset-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.poster-preset-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.poster-preset-card-active .poster-preset-hint {
+  color: var(--accent);
+}

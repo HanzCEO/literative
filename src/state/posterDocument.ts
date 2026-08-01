@@ -93,6 +93,40 @@ export function createDocumentFromImage(
   return document;
 }
 
+/**
+ * Create a document at the poster size with the image fitted and centered.
+ * The image keeps its ratio and fills as much of the canvas as possible.
+ */
+export function createDocumentWithImage(
+  posterWidth: number,
+  posterHeight: number,
+  imageWidth: number,
+  imageHeight: number,
+  src: string,
+): PosterDocument {
+  const document = createDocument(posterWidth, posterHeight);
+  const scale = Math.min(
+    posterWidth / imageWidth,
+    posterHeight / imageHeight,
+  );
+  const width = Math.max(1, Math.round(imageWidth * scale));
+  const height = Math.max(1, Math.round(imageHeight * scale));
+  document.layers.push({
+    id: nextId(),
+    kind: "image",
+    name: "Generated poster",
+    visible: true,
+    opacity: 1,
+    blendMode: "source-over",
+    x: Math.round((posterWidth - width) / 2),
+    y: Math.round((posterHeight - height) / 2),
+    src,
+    width,
+    height,
+  });
+  return document;
+}
+
 export function createTextLayer(
   x: number,
   y: number,

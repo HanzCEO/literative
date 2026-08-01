@@ -7,24 +7,40 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  DEFAULT_POSTER_SIZE,
+  type PosterSize,
+} from "./posterSizes";
 
 export interface Project {
   id: string;
   name: string;
   description: string;
   createdAt: string;
+  posterSize: PosterSize;
 }
 
 interface ProjectsContextValue {
   projects: Project[];
   activeProject: Project | null;
-  createProject: (input: { name: string; description?: string }) => Project;
+  createProject: (input: {
+    name: string;
+    description?: string;
+    posterSize?: PosterSize;
+  }) => Project;
   selectProject: (id: string) => void;
   removeProject: (id: string) => void;
 }
 
 const STORAGE_KEY = "literative.projects";
 const ACTIVE_KEY = "literative.activeProject";
+
+function normalizeProject(project: Project): Project {
+  return {
+    ...project,
+    posterSize: project.posterSize ?? { ...DEFAULT_POSTER_SIZE },
+  };
+}
 
 function loadProjects(): Project[] {
   try {
@@ -33,7 +49,9 @@ function loadProjects(): Project[] {
       return [];
     }
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Project[]) : [];
+    return Array.isArray(parsed)
+      ? (parsed as Project[]).map(normalizeProject)
+      : [];
   } catch {
     return [];
   }
@@ -68,7 +86,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, [activeProjectId]);
 
   const createProject = useCallback(
-    (input: { name: string; description?: string }): Project => {
+    (input: {
+      name: string;
+      description?: string;
+      posterSize?: PosterSize;
+    }): Project => {
       const project: Project = {
         id: `project-${Date.now().toString(36)}-${Math.random()
           .toString(36)
@@ -76,6 +98,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         name: input.name.trim(),
         description: (input.description ?? "").trim(),
         createdAt: new Date().toISOString(),
+        posterSize: input.posterSize ?? { ...DEFAULT_POSTER_SIZE },
       };
       setProjects((previous) => [...previous, project]);
       return project;

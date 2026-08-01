@@ -12,7 +12,7 @@ import { MoodboardProvider, useMoodboard } from "./state/MoodboardContext";
 import { SettingsProvider } from "./state/SettingsContext";
 import { EditorProvider, useEditor } from "./state/EditorContext";
 import { ProjectsProvider, useProjects } from "./state/ProjectsContext";
-import { createDocumentFromImage } from "./state/posterDocument";
+import { createDocumentFromImage, createDocumentWithImage } from "./state/posterDocument";
 import { errorMessage, generatePoster, type GeneratedPoster } from "./lib/generation";
 import "./App.css";
 
@@ -21,7 +21,7 @@ type View = "projects" | "newProject" | "editor" | "poster";
 function Shell() {
   const { references, clearReferences } = useMoodboard();
   const { setDocument } = useEditor();
-  const { createProject, selectProject } = useProjects();
+  const { activeProject, createProject, selectProject } = useProjects();
   const [view, setView] = useState<View>("projects");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GeneratedPoster | null>(null);
@@ -35,7 +35,11 @@ function Shell() {
     clearReferences();
   }
 
-  function handleCreateProject(input: { name: string; description: string }) {
+  function handleCreateProject(input: {
+    name: string;
+    description: string;
+    posterSize: { width: number; height: number };
+  }) {
     const project = createProject(input);
     selectProject(project.id);
     resetGeneration();
@@ -70,9 +74,22 @@ function Shell() {
     if (!result) {
       return;
     }
-    setDocument(
-      createDocumentFromImage(result.width, result.height, result.dataUrl),
-    );
+    const size = activeProject?.posterSize;
+    if (size) {
+      setDocument(
+        createDocumentWithImage(
+          size.width,
+          size.height,
+          result.width,
+          result.height,
+          result.dataUrl,
+        ),
+      );
+    } else {
+      setDocument(
+        createDocumentFromImage(result.width, result.height, result.dataUrl),
+      );
+    }
     setView("poster");
   }
 
