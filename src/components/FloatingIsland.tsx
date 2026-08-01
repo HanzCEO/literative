@@ -2,13 +2,36 @@ import {
   useEffect,
   useState,
   type ClipboardEvent,
-  type DragEvent as ReactDragEvent,
   type FormEvent,
 } from "react";
-import { ArrowUp, CircleNotch, ImageSquare, Plus, X } from "@phosphor-icons/react";
+import {
+  ArrowUp,
+  CircleNotch,
+  ImageSquare,
+  Plus,
+  X,
+} from "@phosphor-icons/react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMoodboard } from "../state/MoodboardContext";
 import { isImageFile, readReferenceFiles } from "../lib/file";
+
+/** Image extensions the moodboard accepts from a file drop. */
+const IMAGE_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "avif",
+]);
+
+/** Return true when the path ends with an accepted image extension. */
+function isImagePath(path: string): boolean {
+  const dot = path.lastIndexOf(".");
+  return dot !== -1 && IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
+}
 
 interface FloatingIslandProps {
   /** Disables the input while a generation runs. */
@@ -17,7 +40,10 @@ interface FloatingIslandProps {
   onGenerate: (prompt: string) => void;
 }
 
-export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps) {
+export function FloatingIsland({
+  busy = false,
+  onGenerate,
+}: FloatingIslandProps) {
   const { references, addFiles, removeReference } = useMoodboard();
   const [prompt, setPrompt] = useState("");
   const [dragActive, setDragActive] = useState(false);
@@ -40,6 +66,45 @@ export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps
     return () => {
       window.removeEventListener("dragover", handleWindowDragOver);
       window.removeEventListener("drop", handleWindowDrop);
+    };
+  }, []);
+
+  // The webview cannot read dropped File objects, so the native Tauri
+  // drag-drop handler supplies the real file paths for the drop.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    try {
+      void getCurrentWebview()
+        .onDragDropEvent((event) => {
+          const { payload } = event;
+          if (payload.type === "enter" || payload.type === "over") {
+            setDragActive(true);
+            return;
+          }
+          setDragActive(false);
+          if (payload.type === "drop") {
+            const paths = payload.paths.filter(isImagePath);
+            if (paths.length > 0) {
+              void readReferenceFiles(paths)
+                .then((files) => addFiles(files))
+                .catch(() => undefined);
+            }
+          }
+        })
+        .then((stop) => {
+          if (disposed) {
+            stop();
+          } else {
+            unlisten = stop;
+          }
+        });
+    } catch {
+      // Outside Tauri there is no native drag-drop handler.
+    }
+    return () => {
+      disposed = true;
+      unlisten?.();
     };
   }, []);
 
@@ -69,24 +134,6 @@ export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps
     }
   }
 
-  function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setDragActive(false);
-    void addFiles(event.dataTransfer.files);
-  }
-
-  function handleDragOver(event: ReactDragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setDragActive(true);
-  }
-
-  function handleDragLeave(event: ReactDragEvent<HTMLDivElement>) {
-    const related = event.relatedTarget as Node | null;
-    if (!event.currentTarget.contains(related)) {
-      setDragActive(false);
-    }
-  }
-
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const text = prompt.trim();
@@ -96,7 +143,8 @@ export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps
     onGenerate(text);
   }
 
-  const canSubmit = !busy && (prompt.trim().length > 0 || references.length > 0);
+  const canSubmit =
+    !busy && (prompt.trim().length > 0 || references.length > 0);
   const placeholder =
     references.length === 0
       ? "Drop reference images, then describe your poster..."
@@ -105,15 +153,16 @@ export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps
   return (
     <div
       className={`island${dragActive ? " island-dragging" : ""}`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
       data-testid="floating-island"
     >
       {references.length > 0 && (
         <div className="moodboard" data-testid="moodboard">
           {references.map((reference) => (
-            <div key={reference.id} className="moodboard-item" title={reference.name}>
+            <div
+              key={reference.id}
+              className="moodboard-item"
+              title={reference.name}
+            >
               <img
                 src={reference.previewUrl}
                 alt={reference.name}
@@ -138,7 +187,11 @@ export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps
           aria-label="Add reference images"
           onClick={() => void handlePickFiles()}
         >
-          <ImageSquare size={22} weight="duotone" className="island-icon-idle" />
+          <ImageSquare
+            size={22}
+            weight="duotone"
+            className="island-icon-idle"
+          />
           <Plus size={22} weight="bold" className="island-icon-hover" />
         </button>
         <input

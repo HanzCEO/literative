@@ -1,5 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -12,6 +18,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
 }));
+const { onDragDropEvent } = vi.hoisted(() => ({ onDragDropEvent: vi.fn() }));
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({ onDragDropEvent }),
+}));
 
 const mockedInvoke = vi.mocked(invoke);
 const mockedOpen = vi.mocked(open);
@@ -19,6 +29,8 @@ const mockedOpen = vi.mocked(open);
 beforeEach(() => {
   mockedInvoke.mockReset();
   mockedOpen.mockReset();
+  onDragDropEvent.mockReset();
+  onDragDropEvent.mockResolvedValue(vi.fn());
 });
 
 function renderIsland(onGenerate: (prompt: string) => void = vi.fn()) {
@@ -31,6 +43,28 @@ function renderIsland(onGenerate: (prompt: string) => void = vi.fn()) {
 
 function imageFile(name: string): File {
   return new File(["fake-image-bytes"], name, { type: "image/png" });
+}
+
+/** Get the handler registered with the Tauri webview. */
+type DragDropPayload =
+  | { type: "enter"; paths: string[]; position: { x: number; y: number } }
+  | { type: "over"; position: { x: number; y: number } }
+  | { type: "drop"; paths: string[]; position: { x: number; y: number } }
+  | { type: "leave" };
+
+function dragDropHandler(): (event: { payload: DragDropPayload }) => void {
+  expect(onDragDropEvent).toHaveBeenCalledOnce();
+  return onDragDropEvent.mock.calls[0][0];
+}
+
+/** Fire a drop payload at the registered Tauri drag-drop handler. */
+function dropPaths(paths: string[]) {
+  const handler = dragDropHandler();
+  act(() => {
+    handler({
+      payload: { type: "drop", paths, position: { x: 10, y: 10 } },
+    });
+  });
 }
 
 describe("FloatingIsland", () => {
@@ -66,48 +100,70 @@ describe("FloatingIsland", () => {
     expect(onGenerate).toHaveBeenCalledWith("Retro travel poster");
   });
 
-  it("adds dropped images to the moodboard", () => {
+  it("adds dropped image paths to the moodboard", async () => {
+    mockedInvoke.mockResolvedValue([
+      { name: "one.png", mimeType: "image/png", dataBase64: "b25l" },
+      { name: "two.png", mimeType: "image/png", dataBase64: "dHdv" },
+    ]);
     renderIsland();
-    const island = screen.getByTestId("floating-island");
-    fireEvent.dragOver(island);
-    expect(island).toHaveClass("island-dragging");
-    fireEvent.drop(island, {
-      dataTransfer: { files: [imageFile("one.png"), imageFile("two.png")] },
+    dropPaths(["/tmp/one.png", "/tmp/two.png"]);
+    await waitFor(() =>
+      expect(screen.getByTestId("moodboard")).toBeInTheDocument(),
+    );
+    expect(mockedInvoke).toHaveBeenCalledWith("read_reference_images", {
+      paths: ["/tmp/one.png", "/tmp/two.png"],
     });
-    const thumbs = screen.getAllByRole("img");
-    expect(thumbs).toHaveLength(2);
-    expect(thumbs[0]).toHaveAttribute("alt", "one.png");
-    expect(screen.getByTestId("moodboard")).toBeInTheDocument();
+    expect(screen.getByAltText("one.png")).toBeInTheDocument();
+    expect(screen.getByAltText("two.png")).toBeInTheDocument();
   });
 
-  it("ignores non-image drops", () => {
+  it("shows the dragging state while files hover the window", () => {
     renderIsland();
-    const island = screen.getByTestId("floating-island");
-    fireEvent.drop(island, {
-      dataTransfer: {
-        files: [new File(["x"], "notes.txt", { type: "text/plain" })],
-      },
+    const handler = dragDropHandler();
+    act(() => {
+      handler({ payload: { type: "over", position: { x: 10, y: 10 } } });
     });
+    expect(screen.getByTestId("floating-island")).toHaveClass(
+      "island-dragging",
+    );
+    act(() => {
+      handler({ payload: { type: "leave" } });
+    });
+    expect(screen.getByTestId("floating-island")).not.toHaveClass(
+      "island-dragging",
+    );
+  });
+
+  it("ignores dropped non-image paths", () => {
+    renderIsland();
+    dropPaths(["/tmp/notes.txt", "/tmp/archive.tar.gz"]);
+    expect(mockedInvoke).not.toHaveBeenCalled();
     expect(screen.queryByTestId("moodboard")).not.toBeInTheDocument();
   });
 
-  it("removes a reference with its remove button", () => {
+  it("removes a reference with its remove button", async () => {
+    mockedInvoke.mockResolvedValue([
+      { name: "one.png", mimeType: "image/png", dataBase64: "b25l" },
+    ]);
     renderIsland();
-    const island = screen.getByTestId("floating-island");
-    fireEvent.drop(island, {
-      dataTransfer: { files: [imageFile("one.png")] },
-    });
+    dropPaths(["/tmp/one.png"]);
+    await waitFor(() =>
+      expect(screen.getByTestId("moodboard")).toBeInTheDocument(),
+    );
     const remove = screen.getByRole("button", { name: "Remove one.png" });
     fireEvent.click(remove);
     expect(screen.queryByTestId("moodboard")).not.toBeInTheDocument();
   });
 
-  it("enables submit when a reference exists", () => {
+  it("enables submit when a reference exists", async () => {
+    mockedInvoke.mockResolvedValue([
+      { name: "one.png", mimeType: "image/png", dataBase64: "b25l" },
+    ]);
     renderIsland();
-    const island = screen.getByTestId("floating-island");
-    fireEvent.drop(island, {
-      dataTransfer: { files: [imageFile("one.png")] },
-    });
+    dropPaths(["/tmp/one.png"]);
+    await waitFor(() =>
+      expect(screen.getByTestId("moodboard")).toBeInTheDocument(),
+    );
     expect(
       screen.getByRole("button", { name: "Generate poster" }),
     ).toBeEnabled();
@@ -161,7 +217,9 @@ describe("FloatingIsland", () => {
     renderIsland();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     fireEvent.paste(input, {
-      clipboardData: { files: [new File(["x"], "notes.txt", { type: "text/plain" })] },
+      clipboardData: {
+        files: [new File(["x"], "notes.txt", { type: "text/plain" })],
+      },
     });
     expect(screen.queryByTestId("moodboard")).not.toBeInTheDocument();
   });

@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
+}));
+const { onDragDropEvent } = vi.hoisted(() => ({ onDragDropEvent: vi.fn() }));
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({ onDragDropEvent }),
 }));
 
 const mockedInvoke = vi.mocked(invoke);
@@ -20,17 +24,25 @@ async function openEditor() {
   await screen.findByRole("textbox", { name: "Poster prompt" });
 }
 
+/** Drop one image path at the registered Tauri drag-drop handler. */
 function dropImage() {
-  const island = screen.getByTestId("floating-island");
-  const file = new File(["fake-image-bytes"], "mood.png", {
-    type: "image/png",
+  const handler = onDragDropEvent.mock.calls[0][0];
+  act(() => {
+    handler({
+      payload: {
+        type: "drop",
+        paths: ["/tmp/mood.png"],
+        position: { x: 0, y: 0 },
+      },
+    });
   });
-  fireEvent.drop(island, { dataTransfer: { files: [file] } });
 }
 
 describe("generation flow", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
+    onDragDropEvent.mockReset();
+    onDragDropEvent.mockResolvedValue(vi.fn());
   });
 
   it("displays the generated poster on the canvas", async () => {
@@ -47,10 +59,7 @@ describe("generation flow", () => {
 
     const poster = await screen.findByAltText("Generated poster");
     expect(poster).toBeInTheDocument();
-    expect(poster).toHaveAttribute(
-      "src",
-      "data:image/png;base64,Z2VuZXJhdGVk",
-    );
+    expect(poster).toHaveAttribute("src", "data:image/png;base64,Z2VuZXJhdGVk");
     expect(screen.getByText("1024 x 1024 px")).toBeInTheDocument();
     // The generated result replaces the empty poster frame.
     expect(screen.queryByTestId("poster-frame")).not.toBeInTheDocument();
@@ -66,6 +75,11 @@ describe("generation flow", () => {
       if (command === "get_app_settings") {
         return Promise.resolve(null);
       }
+      if (command === "read_reference_images") {
+        return Promise.resolve([
+          { name: "mood.png", mimeType: "image/png", dataBase64: "bW9vZA==" },
+        ]);
+      }
       return Promise.resolve({
         dataUrl: "data:image/png;base64,xxx",
         width: 1,
@@ -75,8 +89,10 @@ describe("generation flow", () => {
     await openEditor();
     dropImage();
     // The stack reserves more space when the island shows the moodboard.
-    expect(screen.getByTestId("canvas-stack")).toHaveClass(
-      "canvas-stack-references",
+    await waitFor(() =>
+      expect(screen.getByTestId("canvas-stack")).toHaveClass(
+        "canvas-stack-references",
+      ),
     );
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
