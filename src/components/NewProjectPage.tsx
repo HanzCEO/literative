@@ -27,7 +27,9 @@ const PRESET_ICONS: Record<PosterSizePresetId, typeof FileText> = {
   a4: FileText,
   a5: Files,
   screen_16_9: Monitor,
-  instagram_post: InstagramLogo,
+  instagram_portrait: InstagramLogo,
+  instagram_square: InstagramLogo,
+  instagram_landscape: InstagramLogo,
 };
 
 export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {

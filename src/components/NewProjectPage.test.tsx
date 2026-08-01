@@ -9,7 +9,14 @@ describe("NewProjectPage poster size", () => {
     expect(
       screen.getByRole("group", { name: "Poster size presets" }),
     ).toBeInTheDocument();
-    for (const label of ["A4", "A5", "16:9 Screen", "Instagram post"]) {
+    for (const label of [
+      "A4",
+      "A5",
+      "16:9 Screen",
+      "Instagram portrait",
+      "Instagram square",
+      "Instagram landscape",
+    ]) {
       expect(
         screen.getByRole("button", { name: new RegExp(label) }),
       ).toBeInTheDocument();

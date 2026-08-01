@@ -12,7 +12,9 @@ export type PosterSizePresetId =
   | "a4"
   | "a5"
   | "screen_16_9"
-  | "instagram_post";
+  | "instagram_portrait"
+  | "instagram_square"
+  | "instagram_landscape";
 
 export interface PosterSizePreset {
   id: PosterSizePresetId;
@@ -42,10 +44,22 @@ export const POSTER_SIZE_PRESETS: PosterSizePreset[] = [
     size: { width: 1920, height: 1080 },
   },
   {
-    id: "instagram_post",
-    label: "Instagram post",
+    id: "instagram_portrait",
+    label: "Instagram portrait",
+    hint: "1080 x 1350 px",
+    size: { width: 1080, height: 1350 },
+  },
+  {
+    id: "instagram_square",
+    label: "Instagram square",
     hint: "1080 x 1080 px",
     size: { width: 1080, height: 1080 },
+  },
+  {
+    id: "instagram_landscape",
+    label: "Instagram landscape",
+    hint: "1080 x 566 px",
+    size: { width: 1080, height: 566 },
   },
 ];
 
