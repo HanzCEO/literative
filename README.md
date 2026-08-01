@@ -1,2 +1,3 @@
 # literative
-AI-native poster editor software
+
+AI-native poster editor software.
