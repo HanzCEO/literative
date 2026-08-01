@@ -1,6 +1,14 @@
-import { useState, type DragEvent, type FormEvent } from "react";
-import { ArrowUp, CircleNotch, ImageSquare, X } from "@phosphor-icons/react";
+import {
+  useEffect,
+  useState,
+  type ClipboardEvent,
+  type DragEvent as ReactDragEvent,
+  type FormEvent,
+} from "react";
+import { ArrowUp, CircleNotch, ImageSquare, Plus, X } from "@phosphor-icons/react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useMoodboard } from "../state/MoodboardContext";
+import { isImageFile, readReferenceFiles } from "../lib/file";
 
 interface FloatingIslandProps {
   /** Disables the input while a generation runs. */
@@ -14,18 +22,65 @@ export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps
   const [prompt, setPrompt] = useState("");
   const [dragActive, setDragActive] = useState(false);
 
-  function handleDrop(event: DragEvent<HTMLDivElement>) {
+  // Prevent the webview from navigating when files are dragged over the window.
+  useEffect(() => {
+    function handleWindowDragOver(event: DragEvent) {
+      if (event.dataTransfer?.types?.includes("Files")) {
+        event.preventDefault();
+      }
+    }
+    function handleWindowDrop(event: DragEvent) {
+      if (event.dataTransfer?.types?.includes("Files")) {
+        event.preventDefault();
+      }
+      setDragActive(false);
+    }
+    window.addEventListener("dragover", handleWindowDragOver);
+    window.addEventListener("drop", handleWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", handleWindowDragOver);
+      window.removeEventListener("drop", handleWindowDrop);
+    };
+  }, []);
+
+  async function handlePickFiles() {
+    const selected = await open({
+      multiple: true,
+      filters: [
+        {
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "avif"],
+        },
+      ],
+    });
+    if (!selected) {
+      return;
+    }
+    const paths = Array.isArray(selected) ? selected : [selected];
+    const files = await readReferenceFiles(paths);
+    await addFiles(files);
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+    const files = Array.from(event.clipboardData?.files ?? []);
+    if (files.some(isImageFile)) {
+      event.preventDefault();
+      void addFiles(files);
+    }
+  }
+
+  function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragActive(false);
     void addFiles(event.dataTransfer.files);
   }
 
-  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+  function handleDragOver(event: ReactDragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragActive(true);
   }
 
-  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+  function handleDragLeave(event: ReactDragEvent<HTMLDivElement>) {
     const related = event.relatedTarget as Node | null;
     if (!event.currentTarget.contains(related)) {
       setDragActive(false);
@@ -70,18 +125,27 @@ export function FloatingIsland({ busy = false, onGenerate }: FloatingIslandProps
                 aria-label={`Remove ${reference.name}`}
                 onClick={() => removeReference(reference.id)}
               >
-                <X size={12} weight="bold" />
+                <X size={14} weight="bold" />
               </button>
             </div>
           ))}
         </div>
       )}
       <form className="island-form" onSubmit={handleSubmit}>
-        <ImageSquare size={22} weight="duotone" className="island-icon" />
+        <button
+          type="button"
+          className="island-icon-button"
+          aria-label="Add reference images"
+          onClick={() => void handlePickFiles()}
+        >
+          <ImageSquare size={22} weight="duotone" className="island-icon-idle" />
+          <Plus size={22} weight="bold" className="island-icon-hover" />
+        </button>
         <input
           className="island-input"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
+          onPaste={handlePaste}
           placeholder={placeholder}
           aria-label="Poster prompt"
           disabled={busy}

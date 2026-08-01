@@ -102,6 +102,39 @@ fn save_app_settings(
     Ok(settings)
 }
 
+/// Read image files from the filesystem and return them as reference payloads.
+#[tauri::command]
+fn read_reference_images(paths: Vec<String>) -> Result<Vec<ai_client::ReferencePayload>> {
+    use base64::Engine;
+
+    paths
+        .into_iter()
+        .map(|path| {
+            let bytes = std::fs::read(&path).map_err(|err| {
+                ImageCoreError::Message(format!("failed to read {path}: {err}"))
+            })?;
+            let mime = match image::guess_format(&bytes) {
+                Ok(image::ImageFormat::Png) => "image/png",
+                Ok(image::ImageFormat::Jpeg) => "image/jpeg",
+                Ok(image::ImageFormat::Gif) => "image/gif",
+                Ok(image::ImageFormat::WebP) => "image/webp",
+                Ok(image::ImageFormat::Bmp) => "image/bmp",
+                Ok(image::ImageFormat::Avif) => "image/avif",
+                _ => "image/png",
+            };
+            let name = std::path::Path::new(&path)
+                .file_name()
+                .map(|part| part.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.clone());
+            Ok(ai_client::ReferencePayload {
+                name,
+                mime_type: mime.into(),
+                data_base64: base64::engine::general_purpose::STANDARD.encode(bytes),
+            })
+        })
+        .collect()
+}
+
 /// Generate a poster from a prompt and optional reference images.
 #[tauri::command]
 async fn generate_poster(
@@ -148,6 +181,7 @@ pub fn run() {
             image_export_jpeg,
             image_metadata,
             generate_poster,
+            read_reference_images,
             export_poster_to_file,
             get_app_settings,
             save_app_settings,

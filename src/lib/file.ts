@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+
 /** Return true when the file is a raster image the app can display. */
 export function isImageFile(file: File): boolean {
   return file.type.startsWith("image/");
@@ -33,4 +35,37 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error(`Failed to load image from ${src}`));
     image.src = src;
   });
+}
+
+interface ReferencePayload {
+  name: string;
+  mimeType: string;
+  dataBase64: string;
+}
+
+/** Convert a base64 string into raw bytes. */
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+/** Read the picked image paths through the Rust backend into File objects. */
+export async function readReferenceFiles(paths: string[]): Promise<File[]> {
+  if (paths.length === 0) {
+    return [];
+  }
+  const payloads = await invoke<ReferencePayload[]>(
+    "read_reference_images",
+    { paths },
+  );
+  return payloads.map(
+    (payload) =>
+      new File([base64ToBytes(payload.dataBase64)], payload.name, {
+        type: payload.mimeType,
+      }),
+  );
 }

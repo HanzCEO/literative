@@ -1,8 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { MoodboardProvider } from "../state/MoodboardContext";
 import { FloatingIsland } from "./FloatingIsland";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn(),
+}));
+
+const mockedInvoke = vi.mocked(invoke);
+const mockedOpen = vi.mocked(open);
+
+beforeEach(() => {
+  mockedInvoke.mockReset();
+  mockedOpen.mockReset();
+});
 
 function renderIsland(onGenerate: (prompt: string) => void = vi.fn()) {
   return render(
@@ -94,5 +111,58 @@ describe("FloatingIsland", () => {
     expect(
       screen.getByRole("button", { name: "Generate poster" }),
     ).toBeEnabled();
+  });
+
+  it("adds picked images through the native file dialog", async () => {
+    const user = userEvent.setup();
+    mockedOpen.mockResolvedValue(["/tmp/one.png", "/tmp/two.png"]);
+    mockedInvoke.mockResolvedValue([
+      { name: "one.png", mimeType: "image/png", dataBase64: "b25l" },
+      { name: "two.png", mimeType: "image/png", dataBase64: "dHdv" },
+    ]);
+    renderIsland();
+    await user.click(
+      screen.getByRole("button", { name: "Add reference images" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("moodboard")).toBeInTheDocument(),
+    );
+    expect(mockedOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ multiple: true }),
+    );
+    expect(mockedInvoke).toHaveBeenCalledWith("read_reference_images", {
+      paths: ["/tmp/one.png", "/tmp/two.png"],
+    });
+    expect(screen.getByAltText("one.png")).toBeInTheDocument();
+    expect(screen.getByAltText("two.png")).toBeInTheDocument();
+  });
+
+  it("does nothing when the file dialog is cancelled", async () => {
+    const user = userEvent.setup();
+    mockedOpen.mockResolvedValue(null);
+    renderIsland();
+    await user.click(
+      screen.getByRole("button", { name: "Add reference images" }),
+    );
+    expect(screen.queryByTestId("moodboard")).not.toBeInTheDocument();
+  });
+
+  it("adds a pasted image from the clipboard", () => {
+    renderIsland();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    fireEvent.paste(input, {
+      clipboardData: { files: [imageFile("clip.png")] },
+    });
+    expect(screen.getByAltText("clip.png")).toBeInTheDocument();
+    expect(screen.getByTestId("moodboard")).toBeInTheDocument();
+  });
+
+  it("ignores pasted text", () => {
+    renderIsland();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    fireEvent.paste(input, {
+      clipboardData: { files: [new File(["x"], "notes.txt", { type: "text/plain" })] },
+    });
+    expect(screen.queryByTestId("moodboard")).not.toBeInTheDocument();
   });
 });
