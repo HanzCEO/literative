@@ -52,6 +52,43 @@ describe("poster editor", () => {
     mockedSave.mockReset();
   });
 
+  it("shows the poster base frame at the project poster size", async () => {
+    await openEditor();
+    expect(screen.getByTestId("poster-frame")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", {
+        name: "Poster base canvas 1024 by 1536 pixels",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1024 x 1536 px")).toBeInTheDocument();
+  });
+
+  it("shows a poster frame at a custom project size", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(
+      screen.getAllByRole("button", { name: "New project" })[0],
+    );
+    await user.type(
+      screen.getByLabelText("Project name"),
+      "Custom size project",
+    );
+    const widthInput = screen.getByLabelText("Poster width in pixels");
+    await user.clear(widthInput);
+    await user.type(widthInput, "800");
+    const heightInput = screen.getByLabelText("Poster height in pixels");
+    await user.clear(heightInput);
+    await user.type(heightInput, "600");
+    await user.click(screen.getByRole("button", { name: "Create project" }));
+    await screen.findByRole("textbox", { name: "Poster prompt" });
+    expect(
+      screen.getByRole("img", {
+        name: "Poster base canvas 800 by 600 pixels",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("800 x 600 px")).toBeInTheDocument();
+  });
+
   it("opens with the generated poster as the base layer", async () => {
     await enterEditor();
     expect(screen.getByTestId("poster-canvas")).toBeInTheDocument();

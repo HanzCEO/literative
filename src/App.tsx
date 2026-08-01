@@ -5,6 +5,7 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { FloatingIsland } from "./components/FloatingIsland";
 import { PosterResult } from "./components/PosterResult";
+import { PosterFrame } from "./components/PosterFrame";
 import { EditorScreen } from "./components/editor/EditorScreen";
 import { ProjectListPage } from "./components/ProjectListPage";
 import { NewProjectPage } from "./components/NewProjectPage";
@@ -152,20 +153,32 @@ function Shell() {
             {view === "poster" ? (
               <EditorScreen onExit={handleExitEditor} />
             ) : (
-              <div className="canvas-stack">
-                <FloatingIsland busy={generating} onGenerate={handleGenerate} />
+              <div
+                className={`canvas-stack${references.length > 0 ? " canvas-stack-references" : ""}`}
+                data-testid="canvas-stack"
+              >
+                <div className="canvas-stage">
+                  {result ? (
+                    <PosterResult
+                      poster={result}
+                      onDismiss={handleDismiss}
+                      onEdit={handleEdit}
+                    />
+                  ) : (
+                    activeProject && (
+                      <PosterFrame
+                        width={activeProject.posterSize.width}
+                        height={activeProject.posterSize.height}
+                      />
+                    )
+                  )}
+                </div>
                 {error && (
                   <p className="generation-error" role="alert">
                     {error}
                   </p>
                 )}
-                {result && (
-                  <PosterResult
-                    poster={result}
-                    onDismiss={handleDismiss}
-                    onEdit={handleEdit}
-                  />
-                )}
+                <FloatingIsland busy={generating} onGenerate={handleGenerate} />
               </div>
             )}
           </>

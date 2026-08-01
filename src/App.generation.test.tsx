@@ -52,6 +52,8 @@ describe("generation flow", () => {
       "data:image/png;base64,Z2VuZXJhdGVk",
     );
     expect(screen.getByText("1024 x 1024 px")).toBeInTheDocument();
+    // The generated result replaces the empty poster frame.
+    expect(screen.queryByTestId("poster-frame")).not.toBeInTheDocument();
     expect(mockedInvoke).toHaveBeenCalledWith(
       "generate_poster",
       expect.objectContaining({ prompt: "A neon jazz poster" }),
@@ -72,6 +74,10 @@ describe("generation flow", () => {
     });
     await openEditor();
     dropImage();
+    // The stack reserves more space when the island shows the moodboard.
+    expect(screen.getByTestId("canvas-stack")).toHaveClass(
+      "canvas-stack-references",
+    );
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
@@ -117,6 +123,8 @@ describe("generation flow", () => {
     await waitFor(() =>
       expect(screen.queryByAltText("Generated poster")).not.toBeInTheDocument(),
     );
+    // The empty poster frame returns to the center stage.
+    expect(screen.getByTestId("poster-frame")).toBeInTheDocument();
   });
 
   it("disables the input while generating", async () => {
