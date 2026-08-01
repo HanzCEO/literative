@@ -82,14 +82,14 @@ body {
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--accent);
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .header-back:hover {
   background: var(--bg-hover);
-  color: var(--text);
+  color: var(--accent-hover);
 }
 
 .theme-toggle {

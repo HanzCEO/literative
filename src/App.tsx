@@ -27,6 +27,7 @@ function Shell() {
   const [result, setResult] = useState<GeneratedPoster | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [backHovered, setBackHovered] = useState(false);
 
   function resetGeneration() {
     setResult(null);
@@ -93,8 +94,13 @@ function Shell() {
               aria-label="Back to projects"
               title="Projects"
               onClick={() => setView("projects")}
+              onMouseEnter={() => setBackHovered(true)}
+              onMouseLeave={() => setBackHovered(false)}
             >
-              <Cactus size={18} weight="regular" />
+              <Cactus
+                size={18}
+                weight={backHovered ? "fill" : "regular"}
+              />
             </button>
           )}
         </div>
