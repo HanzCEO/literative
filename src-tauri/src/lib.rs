@@ -135,14 +135,16 @@ fn read_reference_images(paths: Vec<String>) -> Result<Vec<ai_client::ReferenceP
         .collect()
 }
 
-/// Generate a poster from a prompt and optional reference images.
+/// Generate a poster from a prompt, reference images, and project params.
 #[tauri::command]
 async fn generate_poster(
     app: tauri::AppHandle,
     prompt: String,
     references: Vec<ReferencePayload>,
+    params: settings::GenerationParams,
 ) -> Result<ai_client::GenerationResult> {
-    let settings = load_settings(&app)?.unwrap_or_default();
+    let mut settings = load_settings(&app)?.unwrap_or_default();
+    settings.params = params;
     let request = ai_client::GenerationRequest {
         settings,
         prompt,

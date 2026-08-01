@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fileToBase64 } from "./file";
 import type { ReferenceImage } from "../state/MoodboardContext";
+import type { GenerationParams } from "../state/settingsTypes";
 
 export interface GeneratedPoster {
   dataUrl: string;
@@ -12,6 +13,7 @@ export interface GeneratedPoster {
 export async function generatePoster(
   prompt: string,
   references: ReferenceImage[],
+  params: GenerationParams,
 ): Promise<GeneratedPoster> {
   const payload = await Promise.all(
     references.map(async (reference) => ({
@@ -23,6 +25,7 @@ export async function generatePoster(
   return invoke<GeneratedPoster>("generate_poster", {
     prompt,
     references: payload,
+    params,
   });
 }
 

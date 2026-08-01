@@ -15,6 +15,7 @@ import { EditorProvider, useEditor } from "./state/EditorContext";
 import { ProjectsProvider, useProjects } from "./state/ProjectsContext";
 import { createDocumentFromImage, createDocumentWithImage } from "./state/posterDocument";
 import { errorMessage, generatePoster, type GeneratedPoster } from "./lib/generation";
+import { defaultProjectSettings } from "./state/settingsTypes";
 import "./App.css";
 
 type View = "projects" | "newProject" | "editor" | "poster";
@@ -66,7 +67,9 @@ function Shell() {
     setGenerating(true);
     setError(null);
     try {
-      const poster = await generatePoster(prompt, references);
+      const params =
+        activeProject?.settings.params ?? defaultProjectSettings().params;
+      const poster = await generatePoster(prompt, references, params);
       setResult(poster);
     } catch (err) {
       setError(errorMessage(err));
