@@ -1,6 +1,8 @@
 import { Sparkle } from "@phosphor-icons/react";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { FloatingIsland } from "./components/FloatingIsland";
+import { MoodboardProvider } from "./state/MoodboardContext";
 import "./App.css";
 
 function Shell() {
@@ -14,9 +16,7 @@ function Shell() {
         <ThemeToggle />
       </header>
       <main className="canvas-area">
-        <p className="canvas-hint">
-          Drop reference images and type a prompt to design a poster.
-        </p>
+        <FloatingIsland onGenerate={() => {}} />
       </main>
     </div>
   );
@@ -25,7 +25,9 @@ function Shell() {
 export default function App() {
   return (
     <ThemeProvider>
-      <Shell />
+      <MoodboardProvider>
+        <Shell />
+      </MoodboardProvider>
     </ThemeProvider>
   );
 }
