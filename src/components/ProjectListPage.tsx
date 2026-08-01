@@ -37,14 +37,6 @@ export function ProjectListPage({
           <p className="project-empty-hint">
             Create your first project to open the editor.
           </p>
-          <button
-            type="button"
-            className="toolbar-button toolbar-button-primary"
-            onClick={onNewProject}
-          >
-            <Plus size={16} weight="bold" />
-            New project
-          </button>
         </div>
       ) : (
         <ul className="project-list">
