@@ -1,0 +1,72 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--bundles dmg'
+            files: 'src-tauri/target/release/bundle/dmg/*.dmg'
+          - platform: 'ubuntu-22.04'
+            args: '--bundles appimage'
+            files: 'src-tauri/target/release/bundle/appimage/*.AppImage'
+          - platform: 'windows-latest'
+            args: '--bundles nsis'
+            files: 'src-tauri/target/release/bundle/nsis/*-setup.exe'
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev javascriptcoregtk-4.1-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build the Tauri app
+        run: npm run tauri build -- ${{ matrix.args }}
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
+
+      - name: Attach the artifact to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.files }}
+          draft: true
+          name: 'Literative ${{ github.ref_name }}'
+          body: 'See the assets to download this version and install.'
+
+  publish-release:
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false
