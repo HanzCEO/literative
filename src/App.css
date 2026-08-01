@@ -918,17 +918,13 @@ select option {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg-elevated);
   color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -939,6 +935,22 @@ select option {
 
 .project-card-active {
   border-color: var(--accent);
+}
+
+.project-card-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .project-card-name {

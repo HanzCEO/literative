@@ -44,58 +44,62 @@ export function ProjectListPage({
         <ul className="project-list">
           {projects.map((project) => (
             <li key={project.id}>
-              <button
-                type="button"
+              <div
                 className={`project-card${
                   activeProject?.id === project.id
                     ? " project-card-active"
                     : ""
                 }`}
-                onClick={() => onOpenProject(project)}
               >
-                <span className="project-card-name">{project.name}</span>
-                {project.description && (
-                  <span className="project-card-description">
-                    {project.description}
-                  </span>
-                )}
-                <span className="project-card-meta">
-                  {new Date(project.createdAt).toLocaleDateString()}
-                </span>
-              </button>
-              <div className="project-menu">
                 <button
                   type="button"
-                  className="project-menu-trigger"
-                  aria-label={`Options for ${project.name}`}
-                  aria-expanded={menuOpen === project.id}
-                  onClick={() =>
-                    setMenuOpen(menuOpen === project.id ? null : project.id)
-                  }
+                  className="project-card-open"
+                  onClick={() => onOpenProject(project)}
                 >
-                  <DotsThree size={18} weight="bold" />
+                  <span className="project-card-name">{project.name}</span>
+                  {project.description && (
+                    <span className="project-card-description">
+                      {project.description}
+                    </span>
+                  )}
+                  <span className="project-card-meta">
+                    {new Date(project.createdAt).toLocaleDateString()}
+                  </span>
                 </button>
-                {menuOpen === project.id && (
-                  <>
-                    <div
-                      className="project-menu-backdrop"
-                      onClick={() => setMenuOpen(null)}
-                    />
-                    <div className="project-menu-popover">
-                      <button
-                        type="button"
-                        className="project-menu-item project-menu-item-danger"
-                        onClick={() => {
-                          removeProject(project.id);
-                          setMenuOpen(null);
-                        }}
-                      >
-                        <Trash size={14} weight="bold" />
-                        Delete
-                      </button>
-                    </div>
-                  </>
-                )}
+                <div className="project-menu">
+                  <button
+                    type="button"
+                    className="project-menu-trigger"
+                    aria-label={`Options for ${project.name}`}
+                    aria-expanded={menuOpen === project.id}
+                    onClick={() =>
+                      setMenuOpen(menuOpen === project.id ? null : project.id)
+                    }
+                  >
+                    <DotsThree size={18} weight="bold" />
+                  </button>
+                  {menuOpen === project.id && (
+                    <>
+                      <div
+                        className="project-menu-backdrop"
+                        onClick={() => setMenuOpen(null)}
+                      />
+                      <div className="project-menu-popover">
+                        <button
+                          type="button"
+                          className="project-menu-item project-menu-item-danger"
+                          onClick={() => {
+                            removeProject(project.id);
+                            setMenuOpen(null);
+                          }}
+                        >
+                          <Trash size={14} weight="bold" />
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </li>
           ))}
