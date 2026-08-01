@@ -207,6 +207,42 @@ describe("poster editor", () => {
     });
   });
 
+  it("zooms in with the Ctrl plus key", async () => {
+    await enterEditor();
+    fireEvent.keyDown(window, { key: "=", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 125%");
+  });
+
+  it("zooms out with the Ctrl minus key", async () => {
+    await enterEditor();
+    fireEvent.keyDown(window, { key: "-", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 80%");
+  });
+
+  it("resets zoom with the Ctrl 0 key", async () => {
+    await enterEditor();
+    fireEvent.keyDown(window, { key: "=", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 125%");
+    fireEvent.keyDown(window, { key: "0", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
+  it("zooms with the Ctrl wheel", async () => {
+    await enterEditor();
+    const wrap = document.querySelector(".editor-canvas-wrap");
+    expect(wrap).not.toBeNull();
+    fireEvent.wheel(wrap!, { deltaY: -100, ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 113%");
+  });
+
+  it("keeps the zoom on a plain wheel scroll", async () => {
+    await enterEditor();
+    const wrap = document.querySelector(".editor-canvas-wrap");
+    expect(wrap).not.toBeNull();
+    fireEvent.wheel(wrap!, { deltaY: -100 });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
   it("returns to the island view with Done", async () => {
     const user = userEvent.setup();
     await enterEditor();
