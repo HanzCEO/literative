@@ -1,3 +1,10 @@
+/* Remove the outline effect from every kind of element. */
+*,
+*:focus,
+*:focus-visible {
+  outline: none;
+}
+
 :root {
   --bg: #f7f7f8;
   --bg-elevated: #ffffff;
@@ -441,6 +448,18 @@ body {
 .toolbar-button:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--accent);
+}
+
+.toolbar-button-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .toolbar-button-primary:hover:not(:disabled) {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+  color: #1a1a1f;
 }
 
 .toolbar-button:disabled {
