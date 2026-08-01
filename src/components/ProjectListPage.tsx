@@ -1,4 +1,5 @@
-import { Files, Plus } from "@phosphor-icons/react";
+import { useState } from "react";
+import { DotsThree, Files, Plus, Trash } from "@phosphor-icons/react";
 import { useProjects, type Project } from "../state/ProjectsContext";
 
 interface ProjectListPageProps {
@@ -11,6 +12,7 @@ export function ProjectListPage({
   onOpenProject,
 }: ProjectListPageProps) {
   const { projects, activeProject, removeProject } = useProjects();
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   return (
     <div className="project-page">
@@ -61,14 +63,40 @@ export function ProjectListPage({
                   {new Date(project.createdAt).toLocaleDateString()}
                 </span>
               </button>
-              <button
-                type="button"
-                className="project-delete"
-                aria-label={`Delete ${project.name}`}
-                onClick={() => removeProject(project.id)}
-              >
-                Delete
-              </button>
+              <div className="project-menu">
+                <button
+                  type="button"
+                  className="project-menu-trigger"
+                  aria-label={`Options for ${project.name}`}
+                  aria-expanded={menuOpen === project.id}
+                  onClick={() =>
+                    setMenuOpen(menuOpen === project.id ? null : project.id)
+                  }
+                >
+                  <DotsThree size={18} weight="bold" />
+                </button>
+                {menuOpen === project.id && (
+                  <>
+                    <div
+                      className="project-menu-backdrop"
+                      onClick={() => setMenuOpen(null)}
+                    />
+                    <div className="project-menu-popover">
+                      <button
+                        type="button"
+                        className="project-menu-item project-menu-item-danger"
+                        onClick={() => {
+                          removeProject(project.id);
+                          setMenuOpen(null);
+                        }}
+                      >
+                        <Trash size={14} weight="bold" />
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>
