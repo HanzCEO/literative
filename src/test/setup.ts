@@ -112,6 +112,29 @@ Object.defineProperty(globalThis, "Image", {
   configurable: true,
 });
 
+// jsdom does not implement ResizeObserver; provide a stub that reports an
+// empty entries list so fit measurement still runs once per observe call.
+class MockResizeObserver {
+  private callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe() {
+    this.callback([], this as unknown as ResizeObserver);
+  }
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
+Object.defineProperty(globalThis, "ResizeObserver", {
+  value: MockResizeObserver,
+  configurable: true,
+});
+
 beforeEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");

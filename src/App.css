@@ -642,18 +642,16 @@ body {
 .editor-canvas-wrap {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 24px;
   overflow: auto;
   position: relative;
 }
 
 .poster-canvas {
-  max-width: 100%;
-  max-height: 100%;
+  margin: auto;
   border-radius: 8px;
   background: #ffffff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
 }
 
 .editor-empty-hint {
@@ -665,6 +663,14 @@ body {
   font-size: 13px;
   pointer-events: none;
   text-align: center;
+}
+
+.editor-zoom {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .editor-message {

@@ -11,6 +11,9 @@ interface PosterCanvasProps {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onMoveLayer: (id: string, x: number, y: number) => void;
+  /** Displayed size in CSS pixels. Omit to let CSS fit the canvas. */
+  displayWidth?: number;
+  displayHeight?: number;
 }
 
 /** Interactive canvas that renders the poster document. */
@@ -19,6 +22,8 @@ export function PosterCanvas({
   selectedId,
   onSelect,
   onMoveLayer,
+  displayWidth,
+  displayHeight,
 }: PosterCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const loadedImages = useRef(new Map<string, HTMLImageElement>());
@@ -117,6 +122,11 @@ export function PosterCanvas({
       ref={canvasRef}
       className="poster-canvas"
       data-testid="poster-canvas"
+      style={
+        displayWidth !== undefined && displayHeight !== undefined
+          ? { width: displayWidth, height: displayHeight }
+          : undefined
+      }
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
