@@ -186,7 +186,7 @@ function drawSelection(
   context.globalAlpha = 1;
   context.globalCompositeOperation = "source-over";
   context.setLineDash([6, 4]);
-  context.strokeStyle = "#7c3aed";
+  context.strokeStyle = "#16a34a";
   context.lineWidth = 2;
   context.strokeRect(x, y, width, height);
   context.restore();

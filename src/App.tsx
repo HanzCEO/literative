@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GearSix, Star } from "@phosphor-icons/react";
+import { Cactus, GearSix } from "@phosphor-icons/react";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -94,7 +94,7 @@ function Shell() {
               title="Projects"
               onClick={() => setView("projects")}
             >
-              <Star size={18} weight="regular" />
+              <Cactus size={18} weight="regular" />
             </button>
           )}
         </div>
