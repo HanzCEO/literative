@@ -1168,7 +1168,7 @@ select option {
   border: none;
 }
 
-.poster-size-section legend {
+.poster-size-section .dialog-label {
   padding: 0;
   margin-bottom: 2px;
 }

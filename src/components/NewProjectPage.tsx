@@ -105,8 +105,8 @@ export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {
             </label>
           </div>
           <div className="new-project-column">
-            <fieldset className="poster-size-section">
-              <legend className="dialog-label">Poster size</legend>
+            <div className="poster-size-section">
+              <span className="dialog-label">Poster size</span>
               <div className="dialog-grid">
                 <label className="dialog-field">
                   <span className="dialog-label">Width</span>
@@ -167,7 +167,7 @@ export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {
                   );
                 })}
               </div>
-            </fieldset>
+            </div>
           </div>
         </div>
         <div className="dialog-footer">
