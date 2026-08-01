@@ -76,90 +76,96 @@ export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {
         </div>
       </div>
       <form className="new-project-form" onSubmit={handleSubmit}>
-        <label className="dialog-field">
-          <span className="dialog-label">Name</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="My first poster"
-            aria-label="Project name"
-            autoFocus
-          />
-        </label>
-        <label className="dialog-field">
-          <span className="dialog-label">Description</span>
-          <input
-            type="text"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Optional"
-            aria-label="Project description"
-          />
-        </label>
-        <fieldset className="poster-size-section">
-          <legend className="dialog-label">Poster size</legend>
-          <div className="dialog-grid">
+        <div className="new-project-columns">
+          <div className="new-project-column">
             <label className="dialog-field">
-              <span className="dialog-label">Width</span>
-              <div className="size-input-wrap">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={width}
-                  onChange={(event) => setWidth(event.target.value)}
-                  aria-label="Poster width in pixels"
-                />
-                <span className="size-input-unit">px</span>
-              </div>
+              <span className="dialog-label">Name</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="My first poster"
+                aria-label="Project name"
+                autoFocus
+              />
             </label>
             <label className="dialog-field">
-              <span className="dialog-label">Height</span>
-              <div className="size-input-wrap">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={height}
-                  onChange={(event) => setHeight(event.target.value)}
-                  aria-label="Poster height in pixels"
-                />
-                <span className="size-input-unit">px</span>
-              </div>
+              <span className="dialog-label">Description</span>
+              <input
+                type="text"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Optional"
+                aria-label="Project description"
+              />
             </label>
           </div>
-          {!sizeValid && (
-            <p className="dialog-error" role="alert">
-              Width and height must be whole pixels between 1 and 100000.
-            </p>
-          )}
-          <div
-            className="poster-preset-grid"
-            role="group"
-            aria-label="Poster size presets"
-          >
-            {POSTER_SIZE_PRESETS.map((preset) => {
-              const Icon = PRESET_ICONS[preset.id];
-              const active = preset.id === selectedPresetId;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={
-                    active
-                      ? "poster-preset-card poster-preset-card-active"
-                      : "poster-preset-card"
-                  }
-                  aria-pressed={active}
-                  onClick={() => applyPreset(preset.size)}
-                >
-                  <Icon size={20} weight="duotone" />
-                  <span className="poster-preset-label">{preset.label}</span>
-                  <span className="poster-preset-hint">{preset.hint}</span>
-                </button>
-              );
-            })}
+          <div className="new-project-column">
+            <fieldset className="poster-size-section">
+              <legend className="dialog-label">Poster size</legend>
+              <div className="dialog-grid">
+                <label className="dialog-field">
+                  <span className="dialog-label">Width</span>
+                  <div className="size-input-wrap">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={width}
+                      onChange={(event) => setWidth(event.target.value)}
+                      aria-label="Poster width in pixels"
+                    />
+                    <span className="size-input-unit">px</span>
+                  </div>
+                </label>
+                <label className="dialog-field">
+                  <span className="dialog-label">Height</span>
+                  <div className="size-input-wrap">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={height}
+                      onChange={(event) => setHeight(event.target.value)}
+                      aria-label="Poster height in pixels"
+                    />
+                    <span className="size-input-unit">px</span>
+                  </div>
+                </label>
+              </div>
+              {!sizeValid && (
+                <p className="dialog-error" role="alert">
+                  Width and height must be whole pixels between 1 and 100000.
+                </p>
+              )}
+              <div
+                className="poster-preset-grid"
+                role="group"
+                aria-label="Poster size presets"
+              >
+                {POSTER_SIZE_PRESETS.map((preset) => {
+                  const Icon = PRESET_ICONS[preset.id];
+                  const active = preset.id === selectedPresetId;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={
+                        active
+                          ? "poster-preset-card poster-preset-card-active"
+                          : "poster-preset-card"
+                      }
+                      aria-pressed={active}
+                      onClick={() => applyPreset(preset.size)}
+                    >
+                      <Icon size={20} weight="duotone" />
+                      <span className="poster-preset-label">{preset.label}</span>
+                      <span className="poster-preset-hint">{preset.hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
           </div>
-        </fieldset>
+        </div>
         <div className="dialog-footer">
           <button
             type="button"

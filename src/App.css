@@ -1143,7 +1143,20 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 480px;
+  max-width: 720px;
+}
+
+.new-project-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.new-project-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .poster-size-section {
