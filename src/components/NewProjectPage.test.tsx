@@ -70,20 +70,25 @@ describe("NewProjectPage poster size", () => {
     );
   });
 
-  it("blocks submission while the size is invalid", async () => {
+  it("shows the size error only after a submit attempt", async () => {
     const user = userEvent.setup();
-    render(<NewProjectPage onCancel={() => {}} onCreate={() => {}} />);
+    const onCreate = vi.fn();
+    render(<NewProjectPage onCancel={() => {}} onCreate={onCreate} />);
     await user.type(screen.getByRole("textbox", { name: "Project name" }), "Demo");
     const width = screen.getByRole("textbox", {
       name: "Poster width in pixels",
     });
     await user.clear(width);
     await user.type(width, "0");
+    // Typing must not raise the error or shift the layout.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create project" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Create project" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Width and height must be whole pixels",
     );
+    expect(onCreate).not.toHaveBeenCalled();
   });
 });

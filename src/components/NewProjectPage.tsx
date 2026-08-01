@@ -37,6 +37,7 @@ export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {
   const [description, setDescription] = useState("");
   const [width, setWidth] = useState(String(DEFAULT_POSTER_SIZE.width));
   const [height, setHeight] = useState(String(DEFAULT_POSTER_SIZE.height));
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   const parsedWidth = parsePixels(width);
   const parsedHeight = parsePixels(height);
@@ -57,6 +58,7 @@ export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    setAttemptedSubmit(true);
     if (!name.trim() || !sizeValid) {
       return;
     }
@@ -133,7 +135,7 @@ export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {
                   </div>
                 </label>
               </div>
-              {!sizeValid && (
+              {attemptedSubmit && !sizeValid && (
                 <p className="dialog-error" role="alert">
                   Width and height must be whole pixels between 1 and 100000.
                 </p>
@@ -179,7 +181,7 @@ export function NewProjectPage({ onCancel, onCreate }: NewProjectPageProps) {
           <button
             type="submit"
             className="dialog-button dialog-button-primary"
-            disabled={!name.trim() || !sizeValid}
+            disabled={!name.trim()}
           >
             Create project
           </button>
