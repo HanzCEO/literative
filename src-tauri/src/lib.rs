@@ -1,5 +1,6 @@
 pub mod ai_client;
 pub mod image_core;
+pub mod poster;
 pub mod settings;
 
 use ai_client::ReferencePayload;
@@ -91,10 +92,28 @@ async fn generate_poster(
     ai_client::generate(request).await
 }
 
+/// Export the final poster to a file chosen by the user.
+///
+/// The `data` argument is the raster composite as PNG bytes. The text
+/// layers are drawn on top with the bundled font, then the result is
+/// written to `path` as PNG or JPEG.
+#[tauri::command]
+fn export_poster_to_file(
+    data: Vec<u8>,
+    text_layers: Vec<poster::TextLayerPayload>,
+    format: String,
+    quality: u8,
+    path: String,
+) -> Result<String> {
+    poster::write_to_file(data, &text_layers, &format, quality, std::path::Path::new(&path))?;
+    Ok(path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             image_preview,
             image_resize,
@@ -103,6 +122,7 @@ pub fn run() {
             image_export_jpeg,
             image_metadata,
             generate_poster,
+            export_poster_to_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
