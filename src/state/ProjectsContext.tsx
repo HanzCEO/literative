@@ -11,6 +11,10 @@ import {
   DEFAULT_POSTER_SIZE,
   type PosterSize,
 } from "./posterSizes";
+import {
+  defaultProjectSettings,
+  type ProjectSettings,
+} from "./settingsTypes";
 
 export interface Project {
   id: string;
@@ -18,6 +22,7 @@ export interface Project {
   description: string;
   createdAt: string;
   posterSize: PosterSize;
+  settings: ProjectSettings;
 }
 
 interface ProjectsContextValue {
@@ -27,9 +32,14 @@ interface ProjectsContextValue {
     name: string;
     description?: string;
     posterSize?: PosterSize;
+    settings?: ProjectSettings;
   }) => Project;
   selectProject: (id: string) => void;
   removeProject: (id: string) => void;
+  updateProjectSettings: (
+    id: string,
+    patch: Partial<ProjectSettings>,
+  ) => void;
 }
 
 const STORAGE_KEY = "literative.projects";
@@ -39,6 +49,7 @@ function normalizeProject(project: Project): Project {
   return {
     ...project,
     posterSize: project.posterSize ?? { ...DEFAULT_POSTER_SIZE },
+    settings: project.settings ?? defaultProjectSettings(),
   };
 }
 
@@ -90,6 +101,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       name: string;
       description?: string;
       posterSize?: PosterSize;
+      settings?: ProjectSettings;
     }): Project => {
       const project: Project = {
         id: `project-${Date.now().toString(36)}-${Math.random()
@@ -99,6 +111,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         description: (input.description ?? "").trim(),
         createdAt: new Date().toISOString(),
         posterSize: input.posterSize ?? { ...DEFAULT_POSTER_SIZE },
+        settings: input.settings ?? defaultProjectSettings(),
       };
       setProjects((previous) => [...previous, project]);
       return project;
@@ -117,9 +130,39 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     setActiveProjectId((current) => (current === id ? null : current));
   }, []);
 
+  const updateProjectSettings = useCallback(
+    (id: string, patch: Partial<ProjectSettings>) => {
+      setProjects((previous) =>
+        previous.map((project) =>
+          project.id === id
+            ? {
+                ...project,
+                settings: { ...project.settings, ...patch },
+              }
+            : project,
+        ),
+      );
+    },
+    [],
+  );
+
   const value = useMemo(
-    () => ({ projects, activeProject, createProject, selectProject, removeProject }),
-    [projects, activeProject, createProject, selectProject, removeProject],
+    () => ({
+      projects,
+      activeProject,
+      createProject,
+      selectProject,
+      removeProject,
+      updateProjectSettings,
+    }),
+    [
+      projects,
+      activeProject,
+      createProject,
+      selectProject,
+      removeProject,
+      updateProjectSettings,
+    ],
   );
 
   return (

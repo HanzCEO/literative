@@ -10,7 +10,7 @@ import { EditorScreen } from "./components/editor/EditorScreen";
 import { ProjectListPage } from "./components/ProjectListPage";
 import { NewProjectPage } from "./components/NewProjectPage";
 import { MoodboardProvider, useMoodboard } from "./state/MoodboardContext";
-import { SettingsProvider } from "./state/SettingsContext";
+import { SettingsProvider, useSettings } from "./state/SettingsContext";
 import { EditorProvider, useEditor } from "./state/EditorContext";
 import { ProjectsProvider, useProjects } from "./state/ProjectsContext";
 import { createDocumentFromImage, createDocumentWithImage } from "./state/posterDocument";
@@ -23,6 +23,7 @@ function Shell() {
   const { references, clearReferences } = useMoodboard();
   const { setDocument } = useEditor();
   const { activeProject, createProject, selectProject } = useProjects();
+  const { settings: globalSettings } = useSettings();
   const [view, setView] = useState<View>("projects");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GeneratedPoster | null>(null);
@@ -41,7 +42,15 @@ function Shell() {
     description: string;
     posterSize: { width: number; height: number };
   }) {
-    const project = createProject(input);
+    const project = createProject({
+      ...input,
+      settings: globalSettings
+        ? {
+            preset: globalSettings.preset,
+            params: { ...globalSettings.params },
+          }
+        : undefined,
+    });
     selectProject(project.id);
     resetGeneration();
     setView("editor");
