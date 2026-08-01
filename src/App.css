@@ -250,6 +250,7 @@ body {
   background: transparent;
   color: var(--accent);
   cursor: pointer;
+  will-change: transform;
   transition: background-color 0.15s ease;
 }
 
