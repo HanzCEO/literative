@@ -42,7 +42,9 @@ export function GenerationBoard({
   });
 
   // Repaint the board: the poster frame, or the generated poster when a
-  // result exists, laid out through the shared fit, zoom, and pan.
+  // result exists, laid out through the shared fit, zoom, and pan. The
+  // dpr-scaled transform keeps the pan and zoom travel one CSS pixel
+  // per CSS pixel on any screen scale.
   const draw = useCallback(() => {
     const canvas = boardRef.current;
     if (!canvas) {
@@ -64,37 +66,79 @@ export function GenerationBoard({
         return;
       }
       const scale = vp.baseFit * vp.zoom;
-      const width = result.width * scale;
-      const height = result.height * scale;
-      const x = vp.panX + (vp.contentW - width) / 2;
-      const y = vp.panY + (vp.contentH - height) / 2;
+      const offsetX = vp.panX + (vp.contentW - result.width * scale) / 2;
+      const offsetY = vp.panY + (vp.contentH - result.height * scale) / 2;
+      context.setTransform(
+        vp.dpr * scale,
+        0,
+        0,
+        vp.dpr * scale,
+        vp.dpr * offsetX,
+        vp.dpr * offsetY,
+      );
       context.save();
       context.shadowColor = "rgba(0, 0, 0, 0.30)";
-      context.shadowBlur = 24 * scale;
-      context.shadowOffsetY = 8 * scale;
-      roundRectPath(context, x, y, width, height, POSTER_RADIUS * scale);
+      context.shadowBlur = vp.interacting ? 0 : 24 * scale;
+      context.shadowOffsetY = vp.interacting ? 0 : 8 * scale;
+      roundRectPath(
+        context,
+        0,
+        0,
+        result.width,
+        result.height,
+        POSTER_RADIUS,
+      );
       context.clip();
-      context.drawImage(image, x, y, width, height);
+      context.drawImage(image, 0, 0, result.width, result.height);
       context.restore();
-      drawBorder(context, x, y, width, height, POSTER_RADIUS * scale);
+      drawBorder(
+        context,
+        0,
+        0,
+        result.width,
+        result.height,
+        POSTER_RADIUS,
+        1 / scale,
+      );
       return;
     }
 
     if (posterSize) {
       const scale = vp.baseFit * vp.zoom;
-      const width = posterSize.width * scale;
-      const height = posterSize.height * scale;
-      const x = vp.panX + (vp.contentW - width) / 2;
-      const y = vp.panY + (vp.contentH - height) / 2;
+      const offsetX = vp.panX + (vp.contentW - posterSize.width * scale) / 2;
+      const offsetY = vp.panY + (vp.contentH - posterSize.height * scale) / 2;
+      context.setTransform(
+        vp.dpr * scale,
+        0,
+        0,
+        vp.dpr * scale,
+        vp.dpr * offsetX,
+        vp.dpr * offsetY,
+      );
       context.save();
       context.shadowColor = "rgba(0, 0, 0, 0.30)";
-      context.shadowBlur = 24 * scale;
-      context.shadowOffsetY = 8 * scale;
-      roundRectPath(context, x, y, width, height, POSTER_RADIUS * scale);
+      context.shadowBlur = vp.interacting ? 0 : 24 * scale;
+      context.shadowOffsetY = vp.interacting ? 0 : 8 * scale;
+      roundRectPath(
+        context,
+        0,
+        0,
+        posterSize.width,
+        posterSize.height,
+        POSTER_RADIUS,
+      );
       context.fillStyle = "#ffffff";
       context.fill();
       context.restore();
-      drawBorder(context, x, y, width, height, POSTER_RADIUS * scale);
+      drawBorder(
+        context,
+        0,
+        0,
+        posterSize.width,
+        posterSize.height,
+        POSTER_RADIUS,
+        1 / scale,
+      );
     }
   }, [board, result, posterSize]);
   drawRef.current = draw;
@@ -260,6 +304,7 @@ function drawBorder(
   width: number,
   height: number,
   radius: number,
+  lineWidth: number = 1,
 ) {
   context.save();
   context.beginPath();
@@ -279,7 +324,7 @@ function drawBorder(
   context.quadraticCurveTo(x, y, x + radius, y);
   context.closePath();
   context.strokeStyle = "rgba(0, 0, 0, 0.25)";
-  context.lineWidth = 1;
+  context.lineWidth = lineWidth;
   context.stroke();
   context.restore();
 }

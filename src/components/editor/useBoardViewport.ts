@@ -29,6 +29,8 @@ export interface ViewportState {
   /** User pan offset in CSS pixels. */
   panX: number;
   panY: number;
+  /** True while a pan drag is active; views drop expensive effects. */
+  interacting: boolean;
 }
 
 interface UseBoardViewportOptions {
@@ -57,6 +59,7 @@ export function useBoardViewport(
     zoom: 1,
     panX: 0,
     panY: 0,
+    interacting: false,
   }).current;
   /** Size of the content in document pixels, set by each view. */
   const contentSize = useRef({ w: 1, h: 1 });
@@ -72,6 +75,8 @@ export function useBoardViewport(
     panStartX: number;
     panStartY: number;
   } | null>(null);
+  const pendingPanRef = useRef<{ x: number; y: number } | null>(null);
+  const panFrameRef = useRef<number | null>(null);
 
   redrawRef.current = onRedraw;
   zoomChangeRef.current = onZoomChange;
@@ -179,8 +184,7 @@ export function useBoardViewport(
     };
     const handleBlur = () => {
       spaceRef.current = false;
-      panningRef.current = false;
-      updateCursor();
+      endPan();
     };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -307,23 +311,52 @@ export function useBoardViewport(
       panStartY: state.panY,
     };
     panningRef.current = true;
+    state.interacting = true;
     updateCursor();
   }
 
+  // Coalesce moves into one repaint per animation frame: a synchronous
+  // repaint per pointer event would starve the input stream, which makes
+  // fast drags choppy and lets them undershoot the cursor.
   function movePan(clientX: number, clientY: number) {
-    const drag = panDragRef.current;
-    if (!drag) {
+    if (!panDragRef.current) {
       return;
     }
-    state.panX = drag.panStartX + (clientX - drag.startX);
-    state.panY = drag.panStartY + (clientY - drag.startY);
-    redrawRef.current();
+    pendingPanRef.current = { x: clientX, y: clientY };
+    if (panFrameRef.current !== null) {
+      return;
+    }
+    const applyPan = () => {
+      panFrameRef.current = null;
+      const pending = pendingPanRef.current;
+      pendingPanRef.current = null;
+      const drag = panDragRef.current;
+      if (!pending || !drag) {
+        return;
+      }
+      state.panX = drag.panStartX + (pending.x - drag.startX);
+      state.panY = drag.panStartY + (pending.y - drag.startY);
+      redrawRef.current();
+    };
+    if (typeof requestAnimationFrame === "function") {
+      panFrameRef.current = requestAnimationFrame(applyPan);
+    } else {
+      applyPan();
+    }
   }
 
   function endPan() {
     panDragRef.current = null;
+    pendingPanRef.current = null;
+    if (panFrameRef.current !== null) {
+      cancelAnimationFrame(panFrameRef.current);
+      panFrameRef.current = null;
+    }
     panningRef.current = false;
+    state.interacting = false;
     updateCursor();
+    // Restore the drop shadow that the drag dropped for speed.
+    redrawRef.current();
   }
 
   const apiRef = useRef<BoardViewportApi | null>(null);

@@ -101,6 +101,78 @@ describe("generation flow", () => {
     );
   });
 
+  it("pans the viewport by the full drag distance", async () => {
+    // Record the last setTransform of each repaint so the test can assert
+    // that the pan offset moves one CSS pixel per CSS pixel of drag.
+    const transforms: number[][] = [];
+    const target: Record<string, unknown> = {
+      setTransform: (...args: number[]) => transforms.push(args),
+    };
+    const stub = new Proxy(target, {
+      get(_, prop) {
+        if (prop === "canvas") {
+          return { width: 300, height: 150 };
+        }
+        if (prop === "setTransform") {
+          return target.setTransform;
+        }
+        if (typeof prop === "string" && !(prop in target)) {
+          target[prop] = () => {};
+        }
+        return target[prop as string];
+      },
+      set(_, prop, value) {
+        target[prop as string] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue(stub);
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    const lastTranslateX = () => {
+      const last = transforms[transforms.length - 1];
+      return (last[4] as number) ?? 0;
+    };
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(canvas, {
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 400,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 450,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      const before = lastTranslateX();
+      fireEvent.pointerMove(canvas, {
+        clientX: 480,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      const after = lastTranslateX();
+      // A 30px drag must move the content by exactly 30 CSS pixels.
+      expect(after - before).toBeCloseTo(30, 5);
+    } finally {
+      vi.useRealTimers();
+      getContextSpy.mockRestore();
+    }
+  });
+
   it("does not zoom while wheeling over the prompt", async () => {
     await openEditor();
     const prompt = screen.getByRole("textbox", { name: "Poster prompt" });

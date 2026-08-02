@@ -104,11 +104,12 @@ export function PosterCanvas({
       vp.dpr * offsetY,
     );
 
-    // Poster sheet with a drop shadow.
+    // Poster sheet with a drop shadow; the shadow is dropped while a
+    // pan drag is active so the repaint stays cheap enough to be smooth.
     context.save();
     context.shadowColor = "rgba(0, 0, 0, 0.30)";
-    context.shadowBlur = 24 * scale;
-    context.shadowOffsetY = 8 * scale;
+    context.shadowBlur = vp.interacting ? 0 : 24 * scale;
+    context.shadowOffsetY = vp.interacting ? 0 : 8 * scale;
     roundRectPath(context, 0, 0, doc.width, doc.height, POSTER_RADIUS);
     context.fillStyle = "#ffffff";
     context.fill();
