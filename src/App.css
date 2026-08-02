@@ -364,6 +364,13 @@ body {
 
 .island-input::placeholder {
   color: var(--text-muted);
+  transition: opacity 0.15s ease;
+}
+
+/* While the drop hint covers the island, hide the input placeholder
+   so it does not read as a second message. */
+.island-dragging .island-input::placeholder {
+  opacity: 0;
 }
 
 .island-input:disabled {
