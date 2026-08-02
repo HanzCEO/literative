@@ -322,25 +322,23 @@ function Shell() {
             </button>
           )}
         </div>
-        <div className="header-center">
-          {view === "editor" && (
-            <>
-              <span
-                className="header-zoom"
-                aria-label="Preview zoom level"
-                title="Scroll to zoom, drag to pan"
-              >
-                Zoom {Math.round(previewZoom * 100)}%
-              </span>
-              {previewSize && (
-                <>
-                  <span className="header-zoom-divider" aria-hidden="true" />
-                  <span className="header-size">{previewSize}</span>
-                </>
-              )}
-            </>
-          )}
-        </div>
+        {view === "editor" && (
+          <div className="header-center">
+            <span
+              className="header-zoom"
+              aria-label="Preview zoom level"
+              title="Scroll to zoom, drag to pan"
+            >
+              Zoom {Math.round(previewZoom * 100)}%
+            </span>
+            {previewSize && (
+              <>
+                <span className="header-zoom-divider" aria-hidden="true" />
+                <span className="header-size">{previewSize}</span>
+              </>
+            )}
+          </div>
+        )}
         <div className="header-actions">
           <button
             type="button"
