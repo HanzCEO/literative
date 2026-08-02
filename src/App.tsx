@@ -8,7 +8,11 @@ import { GenerationBoard } from "./components/GenerationBoard";
 import { EditorScreen } from "./components/editor/EditorScreen";
 import { ProjectListPage } from "./components/ProjectListPage";
 import { NewProjectPage } from "./components/NewProjectPage";
-import { AgentConsole, type AgentActivityItem } from "./components/AgentConsole";
+import {
+  AgentConsole,
+  type AgentChatMessage,
+  type AgentTurnItem,
+} from "./components/AgentConsole";
 import { MoodboardProvider, useMoodboard } from "./state/MoodboardContext";
 import { SettingsProvider, useSettings } from "./state/SettingsContext";
 import { EditorProvider, useEditor } from "./state/EditorContext";
@@ -34,7 +38,8 @@ type View = "projects" | "newProject" | "editor" | "poster";
 function Shell() {
   const { references, clearReferences } = useMoodboard();
   const { setDocument } = useEditor();
-  const { activeProject, createProject, selectProject } = useProjects();
+  const { activeProject, createProject, selectProject, setTurnCount } =
+    useProjects();
   const { settings: globalSettings } = useSettings();
   const [view, setView] = useState<View>("projects");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -47,13 +52,43 @@ function Shell() {
   );
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentStarted, setAgentStarted] = useState(false);
-  const [agentActivity, setAgentActivity] = useState<AgentActivityItem[]>([]);
-  const activityIdRef = useRef(0);
+  const [agentChat, setAgentChat] = useState<AgentChatMessage[]>([]);
+  const messageIdRef = useRef(0);
+  const itemIdRef = useRef(0);
+  const lastTurnNumberRef = useRef(0);
 
-  function appendActivity(item: Omit<AgentActivityItem, "id">) {
-    activityIdRef.current += 1;
-    const id = activityIdRef.current;
-    setAgentActivity((current) => [...current, { id, ...item }]);
+  function appendMessage(message: Omit<AgentChatMessage, "id">) {
+    messageIdRef.current += 1;
+    const id = messageIdRef.current;
+    setAgentChat((current) => [...current, { id, ...message }]);
+  }
+
+  /** Stream one line into the open agent turn bubble. */
+  function appendTurnItem(item: Omit<AgentTurnItem, "id">) {
+    itemIdRef.current += 1;
+    const itemId = itemIdRef.current;
+    setAgentChat((current) => {
+      const last = current[current.length - 1];
+      if (last && last.kind === "agent") {
+        return [
+          ...current.slice(0, -1),
+          { ...last, items: [...(last.items ?? []), { id: itemId, ...item }] },
+        ];
+      }
+      // Defensive: the loop always emits a turn before any tool line.
+      messageIdRef.current += 1;
+      const number = lastTurnNumberRef.current + 1;
+      lastTurnNumberRef.current = number;
+      return [
+        ...current,
+        {
+          id: messageIdRef.current,
+          kind: "agent",
+          number,
+          items: [{ id: itemId, ...item }],
+        },
+      ];
+    });
   }
 
   // Stream agent events into the document, the activity log, and the
@@ -70,13 +105,11 @@ function Shell() {
           setAgentDocument(event.document);
           break;
         case "turn":
-          appendActivity({
-            kind: "turn",
-            text: `Turn ${event.number}`,
-          });
+          lastTurnNumberRef.current = event.number;
+          appendMessage({ kind: "agent", number: event.number, items: [] });
           break;
         case "toolCall":
-          appendActivity({
+          appendTurnItem({
             kind: "tool",
             text: `${event.name} ${summarizeToolArguments(
               event.name,
@@ -85,7 +118,7 @@ function Shell() {
           });
           break;
         case "toolResult":
-          appendActivity({
+          appendTurnItem({
             kind: "result",
             ok: event.ok,
             text: event.ok
@@ -94,24 +127,24 @@ function Shell() {
           });
           break;
         case "imageProgress":
-          appendActivity({ kind: "image", text: "Generating image..." });
+          appendTurnItem({ kind: "image", text: "Generating image..." });
           break;
         case "imageAdded":
-          appendActivity({
+          appendTurnItem({
             kind: "image",
             text: `Image added (${event.width} x ${event.height})`,
           });
           break;
         case "done":
-          appendActivity({ kind: "done", text: event.summary });
+          appendTurnItem({ kind: "done", text: event.summary });
           setAgentRunning(false);
           break;
         case "stopped":
-          appendActivity({ kind: "stopped", text: "Stopped by user" });
+          appendTurnItem({ kind: "stopped", text: "Stopped by user" });
           setAgentRunning(false);
           break;
         case "error":
-          appendActivity({ kind: "error", text: event.message });
+          appendTurnItem({ kind: "error", text: event.message });
           setAgentRunning(false);
           break;
       }
@@ -129,9 +162,12 @@ function Shell() {
 
   function resetAgentState() {
     setAgentDocument(null);
-    setAgentActivity([]);
+    setAgentChat([]);
     setAgentRunning(false);
     setAgentStarted(false);
+    messageIdRef.current = 0;
+    itemIdRef.current = 0;
+    lastTurnNumberRef.current = 0;
   }
 
   async function handleAgentRun(prompt: string) {
@@ -141,22 +177,31 @@ function Shell() {
     }
     setAgentRunning(true);
     setAgentStarted(true);
+    appendMessage({ kind: "user", prompt });
     try {
       const payloads = await referencePayloads(references);
       const params =
         activeProject?.settings.params ?? defaultProjectSettings().params;
       const base = agentDocument ?? createDocument(size.width, size.height);
+      const startTurn = activeProject?.turnCount ?? 0;
       const outcome = await runAgent({
         prompt,
         document: base,
         settings: globalSettings ?? defaultGlobalSettings(),
         params,
         references: payloads,
+        startTurn,
       });
       setAgentDocument(outcome.document);
       setAgentRunning(false);
+      if (activeProject) {
+        const turns = outcome.events.filter(
+          (event) => event.kind === "turn",
+        ).length;
+        setTurnCount(activeProject.id, startTurn + turns);
+      }
     } catch (err) {
-      appendActivity({ kind: "error", text: errorMessage(err) });
+      appendTurnItem({ kind: "error", text: errorMessage(err) });
       setAgentRunning(false);
     }
   }
@@ -314,7 +359,7 @@ function Shell() {
       {view === "editor" && agentStarted && (
         <AgentConsole
           running={agentRunning}
-          activity={agentActivity}
+          chat={agentChat}
           onStop={handleAgentStop}
           onEdit={handleEdit}
           canEdit={agentDocument !== null}

@@ -81,16 +81,51 @@ describe("agent chat", () => {
     const request = (call as unknown as [string, { request: unknown }])[1]
       .request as {
       prompt: string;
+      startTurn: number;
       document: { width: number; height: number; layers: unknown[] };
       params: { width: number };
       references: unknown[];
     };
     expect(request.prompt).toBe("A jazz poster");
+    expect(request.startTurn).toBe(0);
     expect(request.document.width).toBe(1024);
     expect(request.document.height).toBe(1536);
     expect(request.document.layers).toEqual([]);
     expect(request.params.width).toBe(1024);
     expect(request.references).toEqual([]);
+  });
+
+  it("continues the turn count across runs in the same project", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return {
+          document: null,
+          events: [
+            { kind: "turn", number: 1 },
+            { kind: "turn", number: 2 },
+            { kind: "turn", number: 3 },
+          ],
+        };
+      }
+      return null;
+    });
+    await openEditor();
+
+    await submitPrompt("first prompt");
+    await submitPrompt("second prompt");
+
+    const calls = mockedInvoke.mock.calls.filter(
+      ([name]) => name === "agent_run",
+    );
+    expect(calls).toHaveLength(2);
+    const startTurn = (call: unknown[]) =>
+      (call[1] as { request: { startTurn: number } }).request.startTurn;
+    // The first run starts the count; the second continues it.
+    expect(startTurn(calls[0])).toBe(0);
+    expect(startTurn(calls[1])).toBe(3);
   });
 
   it("hides the chat bubble until the user prompts", async () => {
@@ -205,11 +240,15 @@ describe("agent chat", () => {
     });
     emitAgentEvent({ kind: "done", summary: "Finished the poster." });
 
-    expect(screen.getByText("place_object ellipse")).toBeInTheDocument();
-    expect(
-      screen.getByText("place_object: placed ellipse as ag-1"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Finished the poster.")).toBeInTheDocument();
+    // The user prompt is its own bubble.
+    const userBubble = screen.getByText("Add a red circle");
+    expect(userBubble.closest("li")).toHaveClass("agent-bubble-user");
+    // The turn streams into its own separated bubble.
+    const turnBubble = screen.getByText("Turn 1").closest("li");
+    expect(turnBubble).toHaveClass("agent-bubble-turn");
+    expect(turnBubble).toHaveTextContent("place_object ellipse");
+    expect(turnBubble).toHaveTextContent("place_object: placed ellipse as ag-1");
+    expect(turnBubble).toHaveTextContent("Finished the poster.");
 
     // The document event enables the open-in-editor action.
     const user = userEvent.setup();
@@ -277,6 +316,36 @@ describe("agent chat", () => {
     expect(
       screen.queryByRole("button", { name: "Stop agent" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("splits every agent turn into its own bubble", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+    emitAgentEvent({
+      kind: "toolCall",
+      name: "place_object",
+      arguments: { kind: "ellipse" },
+    });
+    emitAgentEvent({ kind: "turn", number: 2 });
+
+    const bubbles = document.querySelectorAll(".agent-bubble-turn");
+    expect(bubbles).toHaveLength(2);
+    expect(bubbles[0]).toHaveTextContent("Turn 1");
+    expect(bubbles[0]).toHaveTextContent("place_object ellipse");
+    expect(bubbles[1]).toHaveTextContent("Turn 2");
+    // The second turn's tool stream stays out of the first bubble.
+    expect(bubbles[1]).not.toHaveTextContent("place_object ellipse");
   });
 
   it("records a failed tool result from the guardrail", async () => {

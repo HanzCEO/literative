@@ -36,6 +36,8 @@ export interface AgentRequest {
   settings: GlobalSettings;
   params: GenerationParams;
   references: ReferencePayload[];
+  /** The turn number the loop starts from; a project continues its count. */
+  startTurn: number;
 }
 
 /** The final outcome of an agent run. */

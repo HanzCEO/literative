@@ -1329,19 +1329,48 @@ select option {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+}
+
+.agent-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 12px;
   font-size: 12px;
   line-height: 1.45;
+  word-break: break-word;
+}
+
+.agent-bubble-user {
+  align-self: flex-end;
+  max-width: 88%;
+  background: var(--accent);
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.agent-bubble-turn {
+  align-self: flex-start;
+  max-width: 92%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
   color: var(--text-secondary);
 }
 
-.agent-activity-empty {
+.agent-bubble-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
 }
 
-.agent-line-turn {
-  color: var(--text);
-  font-weight: 600;
+.agent-line {
+  color: var(--text-secondary);
 }
 
 .agent-line-tool {

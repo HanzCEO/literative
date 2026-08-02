@@ -144,6 +144,8 @@ pub struct AgentRequest {
     /// Project image-generation parameters, overriding the settings.
     pub params: GenerationParams,
     pub references: Vec<ReferencePayload>,
+    /// The turn number the loop starts from; a project continues its count.
+    pub start_turn: u32,
 }
 
 /// The final outcome of an agent run.
@@ -650,12 +652,13 @@ where
         },
     ];
 
-    for turn in 1..=max_turns {
+    for step in 0..max_turns {
+        let number = request.start_turn + step;
         if stop.load(Ordering::Relaxed) {
             push_event(&mut events, &mut emit, &AgentEvent::Stopped);
             return Ok(AgentOutcome { document, events });
         }
-        push_event(&mut events, &mut emit, &AgentEvent::Turn { number: turn });
+        push_event(&mut events, &mut emit, &AgentEvent::Turn { number });
         // Serialize the current document into the context each turn.
         messages.push(ChatMessage {
             role: "system".into(),
@@ -920,6 +923,7 @@ mod tests {
             settings: AppSettings::default(),
             params: GenerationParams::default(),
             references: vec![],
+            start_turn: 0,
         }
     }
 
@@ -1119,6 +1123,30 @@ mod tests {
         assert!(matches!(error, AgentEvent::Error { .. }));
         // The loop executed all three turns before giving up.
         assert!(names.iter().filter(|n| **n == "turn").count() == 3);
+    }
+
+    #[tokio::test]
+    async fn turn_numbers_continue_from_start_turn() {
+        let responses = vec![
+            tool_response(
+                "c1",
+                "place_object",
+                r##"{"kind":"rect","x":0,"y":0,"width":10,"height":10}"##,
+            ),
+            text_response("done"),
+        ];
+        let mut req = request("x");
+        req.start_turn = 7;
+        let outcome = run_scripted(req, responses, 3, Arc::new(AtomicBool::new(false))).await;
+        let turns: Vec<u32> = outcome
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                AgentEvent::Turn { number } => Some(*number),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(turns, vec![7, 8]);
     }
 
     #[tokio::test]

@@ -4,26 +4,31 @@ import {
   Stop,
 } from "@phosphor-icons/react";
 
-/** One rendered line of agent activity. */
-export interface AgentActivityItem {
+/** One streamed line inside an agent turn bubble. */
+export interface AgentTurnItem {
   id: number;
-  kind:
-    | "turn"
-    | "tool"
-    | "result"
-    | "image"
-    | "done"
-    | "stopped"
-    | "error";
+  kind: "tool" | "result" | "image" | "done" | "stopped" | "error";
   text: string;
   ok?: boolean;
+}
+
+/** One message bubble in the agent chat. */
+export interface AgentChatMessage {
+  id: number;
+  kind: "user" | "agent";
+  /** The user's prompt, for user messages. */
+  prompt?: string;
+  /** The turn number, for agent messages. */
+  number?: number;
+  /** The streamed lines inside an agent turn bubble. */
+  items?: AgentTurnItem[];
 }
 
 interface AgentConsoleProps {
   /** True while an agent run is active. */
   running: boolean;
-  /** The streamed activity lines. */
-  activity: AgentActivityItem[];
+  /** The chat bubbles, user prompts and agent turns. */
+  chat: AgentChatMessage[];
   /** Abort the running agent. */
   onStop: () => void;
   /** Open the poster document in the full editor. */
@@ -33,13 +38,14 @@ interface AgentConsoleProps {
 }
 
 /**
- * The agent chat bubble: a viewport-fixed bubble on the left of the
- * screen that streams the agent's tool calls and results. The prompt
- * itself is typed only into the floating island input.
+ * The agent chat: a viewport-fixed panel on the left. The user prompt
+ * is its own bubble on the right, and each agent turn streams into its
+ * own separated bubble on the left. The prompt itself is typed only
+ * into the floating island input.
  */
 export function AgentConsole({
   running,
-  activity,
+  chat,
   onStop,
   onEdit,
   canEdit = false,
@@ -71,16 +77,29 @@ export function AgentConsole({
         )}
       </div>
       <ul className="agent-activity" aria-label="Agent activity">
-        {activity.map((item) => (
-          <li
-            key={item.id}
-            className={`agent-line agent-line-${item.kind}${
-              item.ok === false ? " agent-line-fail" : ""
-            }`}
-          >
-            {item.text}
-          </li>
-        ))}
+        {chat.map((message) =>
+          message.kind === "user" ? (
+            <li key={message.id} className="agent-bubble agent-bubble-user">
+              {message.prompt}
+            </li>
+          ) : (
+            <li key={message.id} className="agent-bubble agent-bubble-turn">
+              <span className="agent-bubble-header">
+                Turn {message.number}
+              </span>
+              {(message.items ?? []).map((item) => (
+                <span
+                  key={item.id}
+                  className={`agent-line agent-line-${item.kind}${
+                    item.ok === false ? " agent-line-fail" : ""
+                  }`}
+                >
+                  {item.text}
+                </span>
+              ))}
+            </li>
+          ),
+        )}
       </ul>
     </aside>
   );

@@ -23,6 +23,8 @@ export interface Project {
   createdAt: string;
   posterSize: PosterSize;
   settings: ProjectSettings;
+  /** How many agent turns this project has completed. */
+  turnCount: number;
 }
 
 interface ProjectsContextValue {
@@ -40,6 +42,8 @@ interface ProjectsContextValue {
     id: string,
     patch: Partial<ProjectSettings>,
   ) => void;
+  /** Record how many agent turns a project has completed. */
+  setTurnCount: (id: string, count: number) => void;
 }
 
 const STORAGE_KEY = "literative.projects";
@@ -50,6 +54,7 @@ function normalizeProject(project: Project): Project {
     ...project,
     posterSize: project.posterSize ?? { ...DEFAULT_POSTER_SIZE },
     settings: project.settings ?? defaultProjectSettings(),
+    turnCount: project.turnCount ?? 0,
   };
 }
 
@@ -112,6 +117,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
         posterSize: input.posterSize ?? { ...DEFAULT_POSTER_SIZE },
         settings: input.settings ?? defaultProjectSettings(),
+        turnCount: 0,
       };
       setProjects((previous) => [...previous, project]);
       return project;
@@ -146,6 +152,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const setTurnCount = useCallback((id: string, count: number) => {
+    setProjects((previous) =>
+      previous.map((project) =>
+        project.id === id ? { ...project, turnCount: count } : project,
+      ),
+    );
+  }, []);
+
   const value = useMemo(
     () => ({
       projects,
@@ -154,6 +168,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       selectProject,
       removeProject,
       updateProjectSettings,
+      setTurnCount,
     }),
     [
       projects,
@@ -162,6 +177,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       selectProject,
       removeProject,
       updateProjectSettings,
+      setTurnCount,
     ],
   );
 
