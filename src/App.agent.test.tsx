@@ -258,6 +258,11 @@ describe("agent chat", () => {
     expect(
       localStorage.getItem(`literative.project.${projects[0].id}.chat`),
     ).toBeNull();
+
+    // A new prompt starts a fresh session: the next turn is Turn 1.
+    await submitPrompt("Another poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+    expect(screen.getByText("Turn 1")).toBeInTheDocument();
   });
 
   it("fades the list edges only where the chat is cut off", async () => {

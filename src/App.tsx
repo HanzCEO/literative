@@ -309,6 +309,8 @@ function Shell() {
     itemIdRef.current = 0;
     lastTurnNumberRef.current = 0;
     if (activeProject) {
+      // Restart the turn numbering: the next run is Turn 1 again.
+      setTurnCount(activeProject.id, 0);
       updateProjectChat(activeProject.id, []);
     }
   }
