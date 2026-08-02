@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
@@ -67,6 +67,46 @@ describe("generation flow", () => {
     expect(mockedInvoke).toHaveBeenCalledWith(
       "generate_poster",
       expect.objectContaining({ prompt: "A neon jazz poster" }),
+    );
+  });
+
+  it("zooms the preview canvas with the wheel", async () => {
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    fireEvent.wheel(canvas, { deltaY: -100 });
+    expect(screen.getByLabelText("Preview zoom level")).toHaveTextContent(
+      "Zoom 113%",
+    );
+  });
+
+  it("pans the preview canvas by dragging", async () => {
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    fireEvent.pointerDown(canvas, {
+      clientX: 400,
+      clientY: 300,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(canvas, {
+      clientX: 500,
+      clientY: 350,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+    // Panning keeps the zoom level unchanged.
+    expect(screen.getByLabelText("Preview zoom level")).toHaveTextContent(
+      "Zoom 100%",
+    );
+  });
+
+  it("does not zoom while wheeling over the prompt", async () => {
+    await openEditor();
+    const prompt = screen.getByRole("textbox", { name: "Poster prompt" });
+    fireEvent.wheel(prompt, { deltaY: -100 });
+    expect(screen.getByLabelText("Preview zoom level")).toHaveTextContent(
+      "Zoom 100%",
     );
   });
 

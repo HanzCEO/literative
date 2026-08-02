@@ -1,9 +1,9 @@
-import { useEffect, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { PencilSimple, X } from "@phosphor-icons/react";
 import { loadImage } from "../lib/file";
 import type { GeneratedPoster } from "../lib/generation";
+import { FIT_PADDING, useBoardViewport } from "./editor/useBoardViewport";
 
-const FIT_PADDING = 32;
 const POSTER_RADIUS = 12;
 
 interface GenerationBoardProps {
@@ -20,7 +20,8 @@ interface GenerationBoardProps {
 
 /**
  * Draws the poster frame or the generated poster onto the canvas-area
- * canvas and hosts the result actions as DOM overlays above it.
+ * canvas and hosts the result actions as DOM overlays above it. The
+ * canvas itself behaves as a viewport: wheel zooms, and dragging pans.
  */
 export function GenerationBoard({
   boardRef,
@@ -31,7 +32,18 @@ export function GenerationBoard({
   onEdit,
   onDismiss,
 }: GenerationBoardProps) {
-  useEffect(() => {
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  const drawRef = useRef<() => void>(() => {});
+  const board = useBoardViewport(boardRef, {
+    onZoomChange: setZoom,
+    onRedraw: () => drawRef.current(),
+  });
+
+  // Repaint the board: the poster frame, or the generated poster when a
+  // result exists, laid out through the shared fit, zoom, and pan.
+  const draw = useCallback(() => {
     const canvas = boardRef.current;
     if (!canvas) {
       return;
@@ -40,71 +52,40 @@ export function GenerationBoard({
     if (!context) {
       return;
     }
-    const cssWidth = canvas.clientWidth;
-    const cssHeight = canvas.clientHeight;
-    if (cssWidth === 0 || cssHeight === 0) {
-      return;
-    }
-    const style = getComputedStyle(canvas);
-    const contentWidth =
-      cssWidth -
-      parseFloat(style.paddingLeft || "0") -
-      parseFloat(style.paddingRight || "0");
-    const contentHeight =
-      cssHeight -
-      parseFloat(style.paddingTop || "0") -
-      parseFloat(style.paddingBottom || "0");
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.round(contentWidth * dpr));
-    canvas.height = Math.max(1, Math.round(contentHeight * dpr));
+    const vp = board.viewport;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = boardBackground();
     context.fillRect(0, 0, canvas.width, canvas.height);
 
-    const availableWidth = contentWidth - FIT_PADDING * 2;
-    const availableHeight = contentHeight - FIT_PADDING * 2 - bottomInset;
-
     if (result) {
-      let cancelled = false;
-      void loadImage(result.dataUrl)
-        .then((image) => {
-          if (cancelled) {
-            return;
-          }
-          const scale = Math.min(
-            availableWidth / result.width,
-            availableHeight / result.height,
-          );
-          const width = result.width * scale;
-          const height = result.height * scale;
-          const x = (contentWidth - width) / 2;
-          const y = (contentHeight - height) / 2;
-          context.save();
-          context.shadowColor = "rgba(0, 0, 0, 0.30)";
-          context.shadowBlur = 24 * scale;
-          context.shadowOffsetY = 8 * scale;
-          roundRectPath(context, x, y, width, height, POSTER_RADIUS * scale);
-          context.clip();
-          context.drawImage(image, x, y, width, height);
-          context.restore();
-          drawBorder(context, x, y, width, height, POSTER_RADIUS * scale);
-        });
-      return () => {
-        cancelled = true;
-      };
+      const image = imageRef.current;
+      if (!image) {
+        return;
+      }
+      const scale = vp.baseFit * vp.zoom;
+      const width = result.width * scale;
+      const height = result.height * scale;
+      const x = vp.panX + (vp.contentW - width) / 2;
+      const y = vp.panY + (vp.contentH - height) / 2;
+      context.save();
+      context.shadowColor = "rgba(0, 0, 0, 0.30)";
+      context.shadowBlur = 24 * scale;
+      context.shadowOffsetY = 8 * scale;
+      roundRectPath(context, x, y, width, height, POSTER_RADIUS * scale);
+      context.clip();
+      context.drawImage(image, x, y, width, height);
+      context.restore();
+      drawBorder(context, x, y, width, height, POSTER_RADIUS * scale);
+      return;
     }
 
     if (posterSize) {
-      const scale = Math.min(
-        availableWidth / posterSize.width,
-        availableHeight / posterSize.height,
-        1,
-      );
+      const scale = vp.baseFit * vp.zoom;
       const width = posterSize.width * scale;
       const height = posterSize.height * scale;
-      const x = (contentWidth - width) / 2;
-      const y = (contentHeight - height) / 2;
+      const x = vp.panX + (vp.contentW - width) / 2;
+      const y = vp.panY + (vp.contentH - height) / 2;
       context.save();
       context.shadowColor = "rgba(0, 0, 0, 0.30)";
       context.shadowBlur = 24 * scale;
@@ -115,7 +96,88 @@ export function GenerationBoard({
       context.restore();
       drawBorder(context, x, y, width, height, POSTER_RADIUS * scale);
     }
-  }, [boardRef, result, posterSize, bottomInset]);
+  }, [board, result, posterSize]);
+  drawRef.current = draw;
+
+  // Fit the preview into the board; the island reserves the bottom inset.
+  useEffect(() => {
+    if (result) {
+      board.setContent(result.width, result.height);
+      board.setFitCalc(
+        (contentW, contentH) =>
+          Math.min(
+            (contentW - FIT_PADDING * 2) / result.width,
+            (contentH - FIT_PADDING * 2 - bottomInset) / result.height,
+          ),
+      );
+    } else if (posterSize) {
+      board.setContent(posterSize.width, posterSize.height);
+      board.setFitCalc(
+        (contentW, contentH) =>
+          Math.min(
+            (contentW - FIT_PADDING * 2) / posterSize.width,
+            (contentH - FIT_PADDING * 2 - bottomInset) / posterSize.height,
+            1,
+          ),
+      );
+    }
+    drawRef.current();
+  }, [board, result, posterSize, bottomInset]);
+
+  // Load the generated image once and repaint when it is ready.
+  useEffect(() => {
+    imageRef.current = null;
+    if (!result) {
+      return;
+    }
+    let cancelled = false;
+    void loadImage(result.dataUrl).then((image) => {
+      if (cancelled) {
+        return;
+      }
+      imageRef.current = image;
+      drawRef.current();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [result, board]);
+
+  // The preview has no draggable content, so every pointer press pans.
+  useEffect(() => {
+    const canvas = boardRef.current;
+    if (!canvas) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button === 1) {
+        event.preventDefault();
+      }
+      canvas.setPointerCapture?.(event.pointerId);
+      board.beginPan(event.clientX, event.clientY);
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      board.movePan(event.clientX, event.clientY);
+    };
+    const handlePointerUp = () => {
+      board.endPan();
+    };
+    const handleDoubleClick = () => {
+      board.resetView();
+    };
+    canvas.addEventListener("pointerdown", handlePointerDown);
+    canvas.addEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("pointerup", handlePointerUp);
+    canvas.addEventListener("pointerleave", handlePointerUp);
+    canvas.addEventListener("dblclick", handleDoubleClick);
+    return () => {
+      canvas.removeEventListener("pointerdown", handlePointerDown);
+      canvas.removeEventListener("pointermove", handlePointerMove);
+      canvas.removeEventListener("pointerup", handlePointerUp);
+      canvas.removeEventListener("pointerleave", handlePointerUp);
+      canvas.removeEventListener("dblclick", handleDoubleClick);
+    };
+  }, [board]);
 
   return (
     <>
@@ -149,6 +211,13 @@ export function GenerationBoard({
           {posterSize.width} x {posterSize.height} px
         </span>
       ) : null}
+      <span
+        className="board-zoom"
+        aria-label="Preview zoom level"
+        title="Scroll to zoom, drag to pan"
+      >
+        Zoom {Math.round(zoom * 100)}%
+      </span>
       {error && (
         <p className="generation-error" role="alert">
           {error}
@@ -171,7 +240,12 @@ function roundRectPath(
   context.lineTo(x + width - radius, y);
   context.quadraticCurveTo(x + width, y, x + width, y + radius);
   context.lineTo(x + width, y + height - radius);
-  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  context.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - radius,
+    y + height,
+  );
   context.lineTo(x + radius, y + height);
   context.quadraticCurveTo(x, y + height, x, y + height - radius);
   context.lineTo(x, y + radius);
@@ -188,9 +262,24 @@ function drawBorder(
   radius: number,
 ) {
   context.save();
-  context.strokeStyle = "rgba(0, 0, 0, 0.12)";
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - radius,
+    y + height,
+  );
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
+  context.strokeStyle = "rgba(0, 0, 0, 0.25)";
   context.lineWidth = 1;
-  roundRectPath(context, x, y, width, height, radius);
   context.stroke();
   context.restore();
 }

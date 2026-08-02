@@ -12,10 +12,8 @@ import {
   hitTestLayer,
   type PosterDocument,
 } from "../../state/posterDocument";
+import { FIT_PADDING, useBoardViewport } from "./useBoardViewport";
 
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 8;
-const FIT_PADDING = 32;
 const POSTER_RADIUS = 12;
 
 /** Imperative zoom API that the editor toolbar and shortcuts call. */
@@ -37,9 +35,9 @@ interface PosterCanvasProps {
 }
 
 /**
- * Drawing board controller. The canvas element itself lives at the app
- * level (canvas-area); this component attaches the fit, zoom, pan, and
- * pointer logic to it and renders no DOM of its own.
+ * Poster editor board. The canvas element itself lives at the app level
+ * (canvas-area); this component draws the poster and attaches the layer
+ * select and drag logic to the shared viewport from useBoardViewport.
  */
 export function PosterCanvas({
   document,
@@ -55,63 +53,25 @@ export function PosterCanvas({
   const selectedRef = useRef(selectedId);
   const onSelectRef = useRef(onSelect);
   const onMoveLayerRef = useRef(onMoveLayer);
-  const onZoomChangeRef = useRef(onZoomChange);
-  const dprRef = useRef(1);
-  const zoomRef = useRef(1);
-  const panRef = useRef({ x: 0, y: 0 });
-  const fitRef = useRef(0.1);
-  const padTopRef = useRef(0);
-  const spaceRef = useRef(false);
-  const panningRef = useRef(false);
-  const dragRef = useRef<
-    | { kind: "layer"; layerId: string; startX: number; startY: number; layerX: number; layerY: number }
-    | { kind: "pan"; startClientX: number; startClientY: number; panStartX: number; panStartY: number }
-    | null
-  >(null);
+  const dragRef = useRef<{
+    kind: "layer";
+    layerId: string;
+    startX: number;
+    startY: number;
+    layerX: number;
+    layerY: number;
+  } | null>(null);
 
   docRef.current = document;
   selectedRef.current = selectedId;
   onSelectRef.current = onSelect;
   onMoveLayerRef.current = onMoveLayer;
-  onZoomChangeRef.current = onZoomChange;
 
-  function updateCursor() {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    canvas.style.cursor = spaceRef.current
-      ? "grab"
-      : panningRef.current
-        ? "grabbing"
-        : "";
-  }
-
-  function roundRectPath(
-    context: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    radius: number,
-  ) {
-    context.beginPath();
-    context.moveTo(x + radius, y);
-    context.lineTo(x + width - radius, y);
-    context.quadraticCurveTo(x + width, y, x + width, y + radius);
-    context.lineTo(x + width, y + height - radius);
-    context.quadraticCurveTo(
-      x + width,
-      y + height,
-      x + width - radius,
-      y + height,
-    );
-    context.lineTo(x + radius, y + height);
-    context.quadraticCurveTo(x, y + height, x, y + height - radius);
-    context.lineTo(x, y + radius);
-    context.quadraticCurveTo(x, y, x + radius, y);
-    context.closePath();
-  }
+  const drawRef = useRef<() => void>(() => {});
+  const board = useBoardViewport(canvasRef, {
+    onZoomChange,
+    onRedraw: () => drawRef.current(),
+  });
 
   // Repaint the whole board. The draw transform maps document pixels to
   // CSS pixels through fit * zoom, then pans with the stored offset.
@@ -126,26 +86,22 @@ export function PosterCanvas({
     }
     const doc = docRef.current;
     const selected = selectedRef.current;
-    const dpr = dprRef.current;
-    const width = canvas.width / dpr;
-    const height = canvas.height / dpr;
+    const vp = board.viewport;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = boardBackground();
     context.fillRect(0, 0, canvas.width, canvas.height);
 
-    const fit = fitRef.current;
-    const zoom = zoomRef.current;
-    const offsetX = panRef.current.x + (width - doc.width * fit * zoom) / 2;
-    const offsetY = panRef.current.y + (height - doc.height * fit * zoom) / 2;
-    const scale = fit * zoom;
+    const scale = vp.baseFit * vp.zoom;
+    const offsetX = vp.panX + (vp.contentW - doc.width * scale) / 2;
+    const offsetY = vp.panY + (vp.contentH - doc.height * scale) / 2;
     context.setTransform(
-      dpr * scale,
+      vp.dpr * scale,
       0,
       0,
-      dpr * scale,
-      dpr * offsetX,
-      dpr * offsetY,
+      vp.dpr * scale,
+      vp.dpr * offsetX,
+      vp.dpr * offsetY,
     );
 
     // Poster sheet with a drop shadow.
@@ -209,51 +165,23 @@ export function PosterCanvas({
     }
     context.globalAlpha = 1;
     context.globalCompositeOperation = "source-over";
-  }, []);
+  }, [board]);
+  drawRef.current = draw;
 
-  // Fit the poster into the board and match the canvas pixel buffer to the
-  // element size. The initial observe call measures right after mount.
+  // Fit the poster into the board; the viewport hook measures the canvas
+  // and owns the pan and zoom state.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    const measure = () => {
-      const cssWidth = canvas.clientWidth;
-      const cssHeight = canvas.clientHeight;
-      if (cssWidth === 0 || cssHeight === 0) {
-        return;
-      }
-      // The board sits under the fixed app header, so the element carries
-      // a top padding. The drawing area is the content box inside it.
-      const style = getComputedStyle(canvas);
-      const paddingTop = parseFloat(style.paddingTop || "0");
-      padTopRef.current = paddingTop;
-      const contentWidth =
-        cssWidth - parseFloat(style.paddingLeft || "0") - parseFloat(style.paddingRight || "0");
-      const contentHeight =
-        cssHeight - paddingTop - parseFloat(style.paddingBottom || "0");
-      const dpr = window.devicePixelRatio || 1;
-      const pixelWidth = Math.max(1, Math.round(contentWidth * dpr));
-      const pixelHeight = Math.max(1, Math.round(contentHeight * dpr));
-      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-        canvas.width = pixelWidth;
-        canvas.height = pixelHeight;
-      }
-      dprRef.current = dpr;
-      const doc = docRef.current;
-      const scale = Math.min(
-        (contentWidth - FIT_PADDING * 2) / doc.width,
-        (contentHeight - FIT_PADDING * 2) / doc.height,
-      );
-      fitRef.current = Math.max(scale, 0.01);
-      draw();
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(canvas);
-    return () => observer.disconnect();
-  }, [draw]);
+    const doc = docRef.current;
+    board.setContent(doc.width, doc.height);
+    board.setFitCalc(
+      (contentW, contentH) =>
+        Math.min(
+          (contentW - FIT_PADDING * 2) / doc.width,
+          (contentH - FIT_PADDING * 2) / doc.height,
+        ),
+    );
+    draw();
+  }, [document, board, draw]);
 
   // Load image layers once and repaint when the document or selection
   // changes.
@@ -290,112 +218,8 @@ export function PosterCanvas({
     };
   }, [document, selectedId, draw]);
 
-  // Wheel zoom at window level. Listening on the window means no element
-  // can swallow the event before the board sees it, and the capture phase
-  // fires before any default webview handling on the target. Plain wheel
-  // needs no modifier, so no GTK or WebKit accelerator can intercept it.
-  useEffect(() => {
-    const handleWheel = (event: WheelEvent) => {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest(".layer-panel, .editor-toolbar, .app-header")
-      ) {
-        // Wheel over editor chrome scrolls or adjusts that chrome instead.
-        return;
-      }
-      event.preventDefault();
-      let delta = event.deltaY;
-      if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
-        delta *= 16;
-      } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
-        delta *= 100;
-      }
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        return;
-      }
-      const rect = canvas.getBoundingClientRect();
-      zoomBy(
-        Math.exp(-delta * 0.0012),
-        { x: event.clientX - rect.left, y: event.clientY - rect.top - padTopRef.current },
-      );
-    };
-    window.addEventListener("wheel", handleWheel, {
-      capture: true,
-      passive: false,
-    });
-    return () =>
-      window.removeEventListener("wheel", handleWheel, { capture: true });
-  }, [draw]);
-
-  // Hold Space to pan the viewport: while it is held, any drag moves the
-  // view instead of the content, exactly like a design tool. The cursor
-  // switches to a hand to make the mode visible.
-  useEffect(() => {
-    const isTyping = (target: EventTarget | null) =>
-      target instanceof HTMLElement &&
-      (target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.tagName === "SELECT" ||
-        target.isContentEditable);
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== "Space" || isTyping(event.target)) {
-        return;
-      }
-      event.preventDefault();
-      if (!event.repeat) {
-        spaceRef.current = true;
-        updateCursor();
-      }
-    };
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.code !== "Space") {
-        return;
-      }
-      if (spaceRef.current) {
-        spaceRef.current = false;
-        updateCursor();
-      }
-    };
-    const handleBlur = () => {
-      spaceRef.current = false;
-      panningRef.current = false;
-      updateCursor();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    window.addEventListener("blur", handleBlur);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-      window.removeEventListener("blur", handleBlur);
-    };
-  }, []);
-
-  // Convert a client-space point to document coordinates.
-  function toDocumentPoint(
-    clientX: number,
-    clientY: number,
-  ): { x: number; y: number } {
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    const dpr = dprRef.current;
-    const width = canvas.width / dpr;
-    const height = canvas.height / dpr;
-    const doc = docRef.current;
-    const fit = fitRef.current;
-    const zoom = zoomRef.current;
-    const offsetX = panRef.current.x + (width - doc.width * fit * zoom) / 2;
-    const offsetY = panRef.current.y + (height - doc.height * fit * zoom) / 2;
-    return {
-      x: (clientX - rect.left - offsetX) / (fit * zoom),
-      y: (clientY - rect.top - padTopRef.current - offsetY) / (fit * zoom),
-    };
-  }
-
   // Pointer interactions on the shared canvas: select and drag layers,
-  // pan on empty space, and reset zoom on double-click.
+  // pan on empty space, and reset the view on double-click.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -406,8 +230,8 @@ export function PosterCanvas({
         event.preventDefault();
       }
       canvas.setPointerCapture?.(event.pointerId);
-      const panOverride = event.button !== 0 || spaceRef.current;
-      const point = toDocumentPoint(event.clientX, event.clientY);
+      const panOverride = board.isPanOverride(event.button);
+      const point = board.toDocPoint(event.clientX, event.clientY);
       const id = panOverride
         ? null
         : hitTestLayer(docRef.current, point.x, point.y);
@@ -429,43 +253,29 @@ export function PosterCanvas({
       if (!panOverride) {
         onSelectRef.current(null);
       }
-      panningRef.current = true;
-      updateCursor();
-      dragRef.current = {
-        kind: "pan",
-        startClientX: event.clientX,
-        startClientY: event.clientY,
-        panStartX: panRef.current.x,
-        panStartY: panRef.current.y,
-      };
+      board.beginPan(event.clientX, event.clientY);
     };
     const handlePointerMove = (event: PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) {
+        board.movePan(event.clientX, event.clientY);
         return;
       }
-      if (drag.kind === "layer") {
-        const point = toDocumentPoint(event.clientX, event.clientY);
-        onMoveLayerRef.current(
-          drag.layerId,
-          Math.round(drag.layerX + point.x - drag.startX),
-          Math.round(drag.layerY + point.y - drag.startY),
-        );
-        return;
-      }
-      panRef.current.x = drag.panStartX + (event.clientX - drag.startClientX);
-      panRef.current.y = drag.panStartY + (event.clientY - drag.startClientY);
-      draw();
+      const point = board.toDocPoint(event.clientX, event.clientY);
+      onMoveLayerRef.current(
+        drag.layerId,
+        Math.round(drag.layerX + point.x - drag.startX),
+        Math.round(drag.layerY + point.y - drag.startY),
+      );
     };
     const handlePointerUp = () => {
       dragRef.current = null;
-      panningRef.current = false;
-      updateCursor();
+      board.endPan();
     };
     const handleDoubleClick = (event: MouseEvent) => {
-      const point = toDocumentPoint(event.clientX, event.clientY);
+      const point = board.toDocPoint(event.clientX, event.clientY);
       if (!hitTestLayer(docRef.current, point.x, point.y)) {
-        resetZoom();
+        board.resetView();
       }
     };
     canvas.addEventListener("pointerdown", handlePointerDown);
@@ -480,57 +290,15 @@ export function PosterCanvas({
       canvas.removeEventListener("pointerleave", handlePointerUp);
       canvas.removeEventListener("dblclick", handleDoubleClick);
     };
-  }, [draw]);
-
-  // Zoom the board around an anchor point in CSS pixels relative to the
-  // canvas. The document point under the anchor stays fixed on screen.
-  function zoomBy(
-    factor: number,
-    anchor?: { x: number; y: number },
-  ) {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    const dpr = dprRef.current;
-    const width = canvas.width / dpr;
-    const height = canvas.height / dpr;
-    const doc = docRef.current;
-    const fit = fitRef.current;
-    const oldZoom = zoomRef.current;
-    const next = Math.min(Math.max(oldZoom * factor, MIN_ZOOM), MAX_ZOOM);
-    if (next === oldZoom) {
-      return;
-    }
-    const anchorX = anchor ? anchor.x : width / 2;
-    const anchorY = anchor ? anchor.y : height / 2;
-    const oldOffsetX = panRef.current.x + (width - doc.width * fit * oldZoom) / 2;
-    const oldOffsetY = panRef.current.y + (height - doc.height * fit * oldZoom) / 2;
-    const docX = (anchorX - oldOffsetX) / (fit * oldZoom);
-    const docY = (anchorY - oldOffsetY) / (fit * oldZoom);
-    zoomRef.current = next;
-    panRef.current.x =
-      anchorX - docX * fit * next - (width - doc.width * fit * next) / 2;
-    panRef.current.y =
-      anchorY - docY * fit * next - (height - doc.height * fit * next) / 2;
-    onZoomChangeRef.current(next);
-    draw();
-  }
-
-  function resetZoom() {
-    zoomRef.current = 1;
-    panRef.current = { x: 0, y: 0 };
-    onZoomChangeRef.current(1);
-    draw();
-  }
+  }, [board]);
 
   useImperativeHandle(
     ref,
     () => ({
-      zoomBy,
-      resetZoom,
+      zoomBy: board.zoomBy,
+      resetZoom: board.resetView,
     }),
-    [draw],
+    [board],
   );
 
   return null;
@@ -556,11 +324,35 @@ function drawSelection(
     return;
   }
   context.save();
-  context.globalAlpha = 1;
-  context.globalCompositeOperation = "source-over";
-  context.setLineDash([6, 4]);
-  context.strokeStyle = "#16a34a";
+  context.strokeStyle = "#4f8cff";
   context.lineWidth = 2;
+  context.setLineDash([6, 4]);
   context.strokeRect(x, y, width, height);
   context.restore();
+}
+
+function roundRectPath(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - radius,
+    y + height,
+  );
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
 }
