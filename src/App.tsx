@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Cactus, GearSix } from "@phosphor-icons/react";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { FloatingIsland } from "./components/FloatingIsland";
-import { PosterResult } from "./components/PosterResult";
-import { PosterFrame } from "./components/PosterFrame";
+import { GenerationBoard } from "./components/GenerationBoard";
 import { EditorScreen } from "./components/editor/EditorScreen";
 import { ProjectListPage } from "./components/ProjectListPage";
 import { NewProjectPage } from "./components/NewProjectPage";
@@ -32,6 +31,7 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [backHovered, setBackHovered] = useState(false);
+  const boardRef = useRef<HTMLCanvasElement | null>(null);
 
   function resetGeneration() {
     setResult(null);
@@ -113,6 +113,7 @@ function Shell() {
   }
 
   const inEditor = view === "editor" || view === "poster";
+  const boardBottomInset = references.length > 0 ? 184 : 112;
 
   return (
     <div className="app">
@@ -148,59 +149,57 @@ function Shell() {
           <ThemeToggle />
         </div>
       </header>
-      <main className="canvas-area">
-        {view === "projects" && (
-          <ProjectListPage
-            onNewProject={() => setView("newProject")}
-            onOpenProject={(project) => handleOpenProject(project.id)}
-          />
-        )}
-        {view === "newProject" && (
-          <NewProjectPage
-            onCancel={() => setView("projects")}
-            onCreate={handleCreateProject}
-          />
-        )}
-        {(view === "editor" || view === "poster") && (
-          <>
-            {view === "poster" ? (
-              <EditorScreen onExit={handleExitEditor} />
-            ) : (
-              <div
-                className={`canvas-stack${references.length > 0 ? " canvas-stack-references" : ""}`}
-                data-testid="canvas-stack"
-              >
-                <div className="canvas-stage">
-                  {result ? (
-                    <PosterResult
-                      poster={result}
-                      onDismiss={handleDismiss}
-                      onEdit={handleEdit}
-                    />
-                  ) : (
-                    activeProject && (
-                      <PosterFrame
-                        width={activeProject.posterSize.width}
-                        height={activeProject.posterSize.height}
-                      />
-                    )
-                  )}
-                </div>
-                {error && (
-                  <p className="generation-error" role="alert">
-                    {error}
-                  </p>
-                )}
-                <FloatingIsland
-                  busy={generating}
-                  onGenerate={handleGenerate}
-                  onOpenSettings={() => setProjectSettingsOpen(true)}
-                />
-              </div>
-            )}
-          </>
-        )}
-      </main>
+      {inEditor ? (
+        <canvas
+          className="canvas-area board-canvas"
+          data-testid="canvas-area"
+          ref={boardRef}
+          role={
+            view === "editor" && !result && activeProject ? "img" : undefined
+          }
+          aria-label={
+            view === "editor" && !result && activeProject
+              ? `Poster base canvas ${activeProject.posterSize.width} by ${activeProject.posterSize.height} pixels`
+              : undefined
+          }
+        />
+      ) : (
+        <main className="canvas-area">
+          {view === "projects" && (
+            <ProjectListPage
+              onNewProject={() => setView("newProject")}
+              onOpenProject={(project) => handleOpenProject(project.id)}
+            />
+          )}
+          {view === "newProject" && (
+            <NewProjectPage
+              onCancel={() => setView("projects")}
+              onCreate={handleCreateProject}
+            />
+          )}
+        </main>
+      )}
+      {view === "poster" && (
+        <EditorScreen boardRef={boardRef} onExit={handleExitEditor} />
+      )}
+      {view === "editor" && (
+        <GenerationBoard
+          boardRef={boardRef}
+          result={result}
+          error={error}
+          posterSize={activeProject?.posterSize ?? null}
+          bottomInset={boardBottomInset}
+          onEdit={handleEdit}
+          onDismiss={handleDismiss}
+        />
+      )}
+      {view === "editor" && (
+        <FloatingIsland
+          busy={generating}
+          onGenerate={handleGenerate}
+          onOpenSettings={() => setProjectSettingsOpen(true)}
+        />
+      )}
       {settingsOpen && (
         <SettingsDialog scope="global" onClose={() => setSettingsOpen(false)} />
       )}

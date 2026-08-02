@@ -57,12 +57,13 @@ describe("generation flow", () => {
     await user.type(input, "A neon jazz poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
 
-    const poster = await screen.findByAltText("Generated poster");
+    const poster = await screen.findByTestId("result-overlay");
     expect(poster).toBeInTheDocument();
-    expect(poster).toHaveAttribute("src", "data:image/png;base64,Z2VuZXJhdGVk");
     expect(screen.getByText("1024 x 1024 px")).toBeInTheDocument();
     // The generated result replaces the empty poster frame.
-    expect(screen.queryByTestId("poster-frame")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("img", { name: /Poster base canvas/ }),
+    ).not.toBeInTheDocument();
     expect(mockedInvoke).toHaveBeenCalledWith(
       "generate_poster",
       expect.objectContaining({ prompt: "A neon jazz poster" }),
@@ -88,16 +89,12 @@ describe("generation flow", () => {
     });
     await openEditor();
     dropImage();
-    // The stack reserves more space when the island shows the moodboard.
-    await waitFor(() =>
-      expect(screen.getByTestId("canvas-stack")).toHaveClass(
-        "canvas-stack-references",
-      ),
-    );
+    // The moodboard shows the dropped reference in the island.
+    await waitFor(() => expect(screen.getByAltText("mood.png")).toBeInTheDocument());
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
-    await screen.findByAltText("Generated poster");
+    await screen.findByTestId("result-overlay");
     const generateCall = mockedInvoke.mock.calls.find(
       (call) => call[0] === "generate_poster",
     );
@@ -132,7 +129,7 @@ describe("generation flow", () => {
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
-    await screen.findByAltText("Generated poster");
+    await screen.findByTestId("result-overlay");
     const generateCall = mockedInvoke.mock.calls.find(
       (call) => call[0] === "generate_poster",
     );
@@ -150,7 +147,7 @@ describe("generation flow", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("connection refused"),
     );
-    expect(screen.queryByAltText("Generated poster")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("result-overlay")).not.toBeInTheDocument();
   });
 
   it("dismisses the poster with its close button", async () => {
@@ -164,13 +161,15 @@ describe("generation flow", () => {
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
-    await screen.findByAltText("Generated poster");
+    await screen.findByTestId("result-overlay");
     await user.click(screen.getByRole("button", { name: "Dismiss poster" }));
     await waitFor(() =>
-      expect(screen.queryByAltText("Generated poster")).not.toBeInTheDocument(),
+      expect(screen.queryByTestId("result-overlay")).not.toBeInTheDocument(),
     );
     // The empty poster frame returns to the center stage.
-    expect(screen.getByTestId("poster-frame")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "Poster base canvas 1024 by 1536 pixels" }),
+    ).toBeInTheDocument();
   });
 
   it("disables the input while generating", async () => {
@@ -188,6 +187,6 @@ describe("generation flow", () => {
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
     expect(input).toBeDisabled();
     resolveInvoke({ dataUrl: "data:image/png;base64,x", width: 1, height: 1 });
-    await screen.findByAltText("Generated poster");
+    await screen.findByTestId("result-overlay");
   });
 });

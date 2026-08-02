@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from "react";
 import {
   Check,
   FileImage,
@@ -15,14 +15,16 @@ import { errorMessage } from "../../lib/generation";
 import { exportPoster } from "../../lib/export";
 
 interface EditorScreenProps {
+  /** The shared drawing board canvas (canvas-area). */
+  boardRef: RefObject<HTMLCanvasElement | null>;
   onExit: () => void;
 }
 
 /**
- * The poster editor. The full-bleed canvas is the drawing board; the
- * toolbar and layer panel float above it as DOM chrome.
+ * The poster editor chrome. The drawing board canvas lives at the app
+ * level; this component floats its toolbar and layer panel above it.
  */
-export function EditorScreen({ onExit }: EditorScreenProps) {
+export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
   const {
     document,
     selectedId,
@@ -33,7 +35,7 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
     setDocument,
   } = useEditor();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const boardRef = useRef<PosterBoardHandle | null>(null);
+  const posterRef = useRef<PosterBoardHandle | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -61,13 +63,13 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
       const reset = code === "Digit0" || code === "Numpad0" || key === "0";
       if (zoomIn) {
         event.preventDefault();
-        boardRef.current?.zoomBy(1.25);
+        posterRef.current?.zoomBy(1.25);
       } else if (zoomOut) {
         event.preventDefault();
-        boardRef.current?.zoomBy(0.8);
+        posterRef.current?.zoomBy(0.8);
       } else if (reset) {
         event.preventDefault();
-        boardRef.current?.resetZoom();
+        posterRef.current?.resetZoom();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -118,9 +120,10 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
   }
 
   return (
-    <div className="editor-screen">
+    <>
       <PosterCanvas
-        ref={boardRef}
+        ref={posterRef}
+        canvasRef={boardRef}
         document={document}
         selectedId={selectedId}
         onSelect={selectLayer}
@@ -148,7 +151,7 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
             type="button"
             className="toolbar-button"
             aria-label="Zoom out"
-            onClick={() => boardRef.current?.zoomBy(0.8)}
+            onClick={() => posterRef.current?.zoomBy(0.8)}
           >
             <Minus size={16} weight="bold" />
           </button>
@@ -156,7 +159,7 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
             type="button"
             className="toolbar-button"
             aria-label="Zoom in"
-            onClick={() => boardRef.current?.zoomBy(1.25)}
+            onClick={() => posterRef.current?.zoomBy(1.25)}
           >
             <Plus size={16} weight="bold" />
           </button>
@@ -220,6 +223,6 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
           {message}
         </p>
       )}
-    </div>
+    </>
   );
 }

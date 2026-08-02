@@ -41,7 +41,7 @@ async function enterEditor() {
   const input = screen.getByRole("textbox", { name: "Poster prompt" });
   await userEvent.type(input, "a poster");
   await userEvent.click(screen.getByRole("button", { name: "Generate poster" }));
-  await screen.findByAltText("Generated poster");
+  await screen.findByTestId("result-overlay");
   await userEvent.click(screen.getByRole("button", { name: "Edit poster" }));
   await screen.findByRole("button", { name: "Add text" });
 }
@@ -54,7 +54,7 @@ describe("poster editor", () => {
 
   it("shows the poster base frame at the project poster size", async () => {
     await openEditor();
-    expect(screen.getByTestId("poster-frame")).toBeInTheDocument();
+    expect(screen.getByTestId("canvas-area")).toBeInTheDocument();
     expect(
       screen.getByRole("img", {
         name: "Poster base canvas 1024 by 1536 pixels",
@@ -91,7 +91,7 @@ describe("poster editor", () => {
 
   it("opens with the generated poster as the base layer", async () => {
     await enterEditor();
-    expect(screen.getByTestId("poster-canvas")).toBeInTheDocument();
+    expect(screen.getByTestId("canvas-area")).toBeInTheDocument();
     expect(screen.getByText("Generated poster")).toBeInTheDocument();
     // The document uses the project poster size, not the image size.
     expect(screen.getByText("1024 x 1536 px")).toBeInTheDocument();
@@ -229,7 +229,7 @@ describe("poster editor", () => {
 
   it("zooms with the Ctrl wheel", async () => {
     await enterEditor();
-    const canvas = document.querySelector(".poster-canvas");
+    const canvas = document.querySelector(".canvas-area");
     expect(canvas).not.toBeNull();
     fireEvent.wheel(canvas!, { deltaY: -100, ctrlKey: true });
     expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 113%");
@@ -237,7 +237,7 @@ describe("poster editor", () => {
 
   it("zooms with the plain wheel", async () => {
     await enterEditor();
-    const canvas = document.querySelector(".poster-canvas");
+    const canvas = document.querySelector(".canvas-area");
     expect(canvas).not.toBeNull();
     // Plain wheel needs no modifier, so no webview can intercept it.
     fireEvent.wheel(canvas!, { deltaY: -100 });
@@ -260,7 +260,7 @@ describe("poster editor", () => {
 
   it("zooms with line-mode wheel deltas", async () => {
     await enterEditor();
-    const canvas = document.querySelector(".poster-canvas");
+    const canvas = document.querySelector(".canvas-area");
     expect(canvas).not.toBeNull();
     // WebKitGTK reports line deltas; one line must still zoom visibly.
     fireEvent.wheel(canvas!, { deltaY: -3, deltaMode: 1 });

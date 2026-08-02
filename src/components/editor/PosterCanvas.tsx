@@ -3,8 +3,8 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
-  type PointerEvent as ReactPointerEvent,
   type Ref,
+  type RefObject,
 } from "react";
 import { loadImage } from "../../lib/file";
 import {
@@ -30,14 +30,16 @@ interface PosterCanvasProps {
   onSelect: (id: string | null) => void;
   onMoveLayer: (id: string, x: number, y: number) => void;
   onZoomChange: (zoom: number) => void;
+  /** The shared drawing board canvas that this component draws on. */
+  canvasRef: RefObject<HTMLCanvasElement | null>;
   /** Ref for the imperative zoom API. */
   ref?: Ref<PosterBoardHandle>;
 }
 
 /**
- * Full-bleed drawing board. The canvas covers the whole editor page and
- * renders the poster with a draw-time transform, so zoom and pan never
- * resize DOM layout and never depend on scroll containers.
+ * Drawing board controller. The canvas element itself lives at the app
+ * level (canvas-area); this component attaches the fit, zoom, pan, and
+ * pointer logic to it and renders no DOM of its own.
  */
 export function PosterCanvas({
   document,
@@ -45,16 +47,20 @@ export function PosterCanvas({
   onSelect,
   onMoveLayer,
   onZoomChange,
+  canvasRef,
   ref,
 }: PosterCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const loadedImages = useRef(new Map<string, HTMLImageElement>());
   const docRef = useRef(document);
   const selectedRef = useRef(selectedId);
+  const onSelectRef = useRef(onSelect);
+  const onMoveLayerRef = useRef(onMoveLayer);
+  const onZoomChangeRef = useRef(onZoomChange);
   const dprRef = useRef(1);
   const zoomRef = useRef(1);
   const panRef = useRef({ x: 0, y: 0 });
   const fitRef = useRef(0.1);
+  const padTopRef = useRef(0);
   const dragRef = useRef<
     | { kind: "layer"; layerId: string; startX: number; startY: number; layerX: number; layerY: number }
     | { kind: "pan"; startClientX: number; startClientY: number; panStartX: number; panStartY: number }
@@ -63,6 +69,9 @@ export function PosterCanvas({
 
   docRef.current = document;
   selectedRef.current = selectedId;
+  onSelectRef.current = onSelect;
+  onMoveLayerRef.current = onMoveLayer;
+  onZoomChangeRef.current = onZoomChange;
 
   function roundRectPath(
     context: CanvasRenderingContext2D,
@@ -201,9 +210,18 @@ export function PosterCanvas({
       if (cssWidth === 0 || cssHeight === 0) {
         return;
       }
+      // The board sits under the fixed app header, so the element carries
+      // a top padding. The drawing area is the content box inside it.
+      const style = getComputedStyle(canvas);
+      const paddingTop = parseFloat(style.paddingTop || "0");
+      padTopRef.current = paddingTop;
+      const contentWidth =
+        cssWidth - parseFloat(style.paddingLeft || "0") - parseFloat(style.paddingRight || "0");
+      const contentHeight =
+        cssHeight - paddingTop - parseFloat(style.paddingBottom || "0");
       const dpr = window.devicePixelRatio || 1;
-      const pixelWidth = Math.round(cssWidth * dpr);
-      const pixelHeight = Math.round(cssHeight * dpr);
+      const pixelWidth = Math.max(1, Math.round(contentWidth * dpr));
+      const pixelHeight = Math.max(1, Math.round(contentHeight * dpr));
       if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
         canvas.width = pixelWidth;
         canvas.height = pixelHeight;
@@ -211,8 +229,8 @@ export function PosterCanvas({
       dprRef.current = dpr;
       const doc = docRef.current;
       const scale = Math.min(
-        (cssWidth - FIT_PADDING * 2) / doc.width,
-        (cssHeight - FIT_PADDING * 2) / doc.height,
+        (contentWidth - FIT_PADDING * 2) / doc.width,
+        (contentHeight - FIT_PADDING * 2) / doc.height,
       );
       fitRef.current = Math.max(scale, 0.01);
       draw();
@@ -276,7 +294,7 @@ export function PosterCanvas({
       const rect = canvas.getBoundingClientRect();
       zoomBy(
         Math.exp(-delta * 0.0012),
-        { x: event.clientX - rect.left, y: event.clientY - rect.top },
+        { x: event.clientX - rect.left, y: event.clientY - rect.top - padTopRef.current },
       );
     };
     canvas.addEventListener("wheel", handleWheel, { passive: false });
@@ -300,72 +318,85 @@ export function PosterCanvas({
     const offsetY = panRef.current.y + (height - doc.height * fit * zoom) / 2;
     return {
       x: (clientX - rect.left - offsetX) / (fit * zoom),
-      y: (clientY - rect.top - offsetY) / (fit * zoom),
+      y: (clientY - rect.top - padTopRef.current - offsetY) / (fit * zoom),
     };
   }
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+  // Pointer interactions on the shared canvas: select and drag layers,
+  // pan on empty space, and reset zoom on double-click.
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
       return;
     }
-    canvas.setPointerCapture?.(event.pointerId);
-    const point = toDocumentPoint(event.clientX, event.clientY);
-    const id = hitTestLayer(docRef.current, point.x, point.y);
-    if (id) {
-      const layer = docRef.current.layers.find((item) => item.id === id);
-      if (layer) {
-        onSelect(id);
-        dragRef.current = {
-          kind: "layer",
-          layerId: id,
-          startX: point.x,
-          startY: point.y,
-          layerX: layer.x,
-          layerY: layer.y,
-        };
-      }
-      return;
-    }
-    onSelect(null);
-    dragRef.current = {
-      kind: "pan",
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      panStartX: panRef.current.x,
-      panStartY: panRef.current.y,
-    };
-  }
-
-  function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const drag = dragRef.current;
-    if (!drag) {
-      return;
-    }
-    if (drag.kind === "layer") {
+    const handlePointerDown = (event: PointerEvent) => {
+      canvas.setPointerCapture?.(event.pointerId);
       const point = toDocumentPoint(event.clientX, event.clientY);
-      onMoveLayer(
-        drag.layerId,
-        Math.round(drag.layerX + point.x - drag.startX),
-        Math.round(drag.layerY + point.y - drag.startY),
-      );
-      return;
-    }
-    panRef.current.x = drag.panStartX + (event.clientX - drag.startClientX);
-    panRef.current.y = drag.panStartY + (event.clientY - drag.startClientY);
-    draw();
-  }
-
-  function handlePointerUp() {
-    dragRef.current = null;
-  }
-
-  function handleDoubleClick(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const point = toDocumentPoint(event.clientX, event.clientY);
-    if (!hitTestLayer(docRef.current, point.x, point.y)) {
-      resetZoom();
-    }
-  }
+      const id = hitTestLayer(docRef.current, point.x, point.y);
+      if (id) {
+        const layer = docRef.current.layers.find((item) => item.id === id);
+        if (layer) {
+          onSelectRef.current(id);
+          dragRef.current = {
+            kind: "layer",
+            layerId: id,
+            startX: point.x,
+            startY: point.y,
+            layerX: layer.x,
+            layerY: layer.y,
+          };
+        }
+        return;
+      }
+      onSelectRef.current(null);
+      dragRef.current = {
+        kind: "pan",
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        panStartX: panRef.current.x,
+        panStartY: panRef.current.y,
+      };
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag) {
+        return;
+      }
+      if (drag.kind === "layer") {
+        const point = toDocumentPoint(event.clientX, event.clientY);
+        onMoveLayerRef.current(
+          drag.layerId,
+          Math.round(drag.layerX + point.x - drag.startX),
+          Math.round(drag.layerY + point.y - drag.startY),
+        );
+        return;
+      }
+      panRef.current.x = drag.panStartX + (event.clientX - drag.startClientX);
+      panRef.current.y = drag.panStartY + (event.clientY - drag.startClientY);
+      draw();
+    };
+    const handlePointerUp = () => {
+      dragRef.current = null;
+    };
+    const handleDoubleClick = (event: MouseEvent) => {
+      const point = toDocumentPoint(event.clientX, event.clientY);
+      if (!hitTestLayer(docRef.current, point.x, point.y)) {
+        resetZoom();
+      }
+    };
+    canvas.addEventListener("pointerdown", handlePointerDown);
+    canvas.addEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("pointerup", handlePointerUp);
+    canvas.addEventListener("pointerleave", handlePointerUp);
+    canvas.addEventListener("dblclick", handleDoubleClick);
+    return () => {
+      canvas.removeEventListener("pointerdown", handlePointerDown);
+      canvas.removeEventListener("pointermove", handlePointerMove);
+      canvas.removeEventListener("pointerup", handlePointerUp);
+      canvas.removeEventListener("pointerleave", handlePointerUp);
+      canvas.removeEventListener("dblclick", handleDoubleClick);
+    };
+  }, [draw]);
 
   // Zoom the board around an anchor point in CSS pixels relative to the
   // canvas. The document point under the anchor stays fixed on screen.
@@ -398,14 +429,14 @@ export function PosterCanvas({
       anchorX - docX * fit * next - (width - doc.width * fit * next) / 2;
     panRef.current.y =
       anchorY - docY * fit * next - (height - doc.height * fit * next) / 2;
-    onZoomChange(next);
+    onZoomChangeRef.current(next);
     draw();
   }
 
   function resetZoom() {
     zoomRef.current = 1;
     panRef.current = { x: 0, y: 0 };
-    onZoomChange(1);
+    onZoomChangeRef.current(1);
     draw();
   }
 
@@ -415,21 +446,10 @@ export function PosterCanvas({
       zoomBy,
       resetZoom,
     }),
-    [draw, onZoomChange],
+    [draw],
   );
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="poster-canvas"
-      data-testid="poster-canvas"
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onDoubleClick={handleDoubleClick}
-    />
-  );
+  return null;
 }
 
 /** Read the theme background color so the board matches the app chrome. */
