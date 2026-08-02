@@ -243,6 +243,36 @@ describe("poster editor", () => {
     expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
   });
 
+  it("zooms with event.code on non-US layouts", async () => {
+    await enterEditor();
+    fireEvent.keyDown(window, { code: "Equal", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 125%");
+    fireEvent.keyDown(window, { code: "Minus", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+    fireEvent.keyDown(window, { code: "NumpadAdd", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 125%");
+    fireEvent.keyDown(window, { code: "Digit0", ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
+  it("zooms with line-mode wheel deltas", async () => {
+    await enterEditor();
+    const wrap = document.querySelector(".editor-canvas-wrap");
+    expect(wrap).not.toBeNull();
+    // WebKitGTK reports line deltas; one line must still zoom visibly.
+    fireEvent.wheel(wrap!, { deltaY: -3, deltaMode: 1, ctrlKey: true });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 106%");
+  });
+
+  it("zooms through the toolbar buttons", async () => {
+    const user = userEvent.setup();
+    await enterEditor();
+    await user.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 125%");
+    await user.click(screen.getByRole("button", { name: "Zoom out" }));
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
   it("returns to the island view with Done", async () => {
     const user = userEvent.setup();
     await enterEditor();

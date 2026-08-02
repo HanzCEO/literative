@@ -4,6 +4,8 @@ import {
   FileImage,
   FilePlus,
   FileX,
+  Minus,
+  Plus,
   TextT,
 } from "@phosphor-icons/react";
 import { useEditor } from "../../state/EditorContext";
@@ -95,6 +97,18 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
     [],
   );
 
+  // Normalize the wheel delta so one notch always zooms by a visible
+  // amount, regardless of the deltaMode the webview reports.
+  function wheelZoomFactor(event: WheelEvent): number {
+    let delta = event.deltaY;
+    if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      delta *= 16;
+    } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      delta *= 100;
+    }
+    return Math.exp(-delta * 0.0012);
+  }
+
   // Measure the fit scale whenever the wrap or the poster size changes.
   useEffect(() => {
     if (!document) {
@@ -128,41 +142,64 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
     return () => observer.disconnect();
   }, [document?.width, document?.height]);
 
-  // Ctrl or Cmd plus wheel zooms toward the cursor.
-  // A plain wheel scroll keeps scrolling the wrap.
+  // Ctrl or Cmd plus wheel zooms toward the cursor. The listener sits on
+  // the window in the capture phase with passive: false, so it runs before
+  // any native scroll and before React's passive wheel handling.
   useEffect(() => {
     if (!document) {
-      return;
-    }
-    const wrap = wrapRef.current;
-    if (!wrap) {
       return;
     }
     function handleWheel(event: WheelEvent) {
       if (!event.ctrlKey && !event.metaKey) {
         return;
       }
+      const wrap = wrapRef.current;
+      if (!wrap || !wrap.contains(event.target as Node)) {
+        return;
+      }
       event.preventDefault();
-      const factor = Math.exp(-event.deltaY * 0.0012);
-      zoomAt(factor, { clientX: event.clientX, clientY: event.clientY });
+      zoomAt(wheelZoomFactor(event), {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
     }
-    wrap.addEventListener("wheel", handleWheel, { passive: false });
-    return () => wrap.removeEventListener("wheel", handleWheel);
+    window.addEventListener("wheel", handleWheel, {
+      capture: true,
+      passive: false,
+    });
+    return () => window.removeEventListener("wheel", handleWheel, {
+      capture: true,
+    });
   }, [document?.width, document?.height, zoomAt]);
 
   // Ctrl or Cmd plus Plus, Minus, or 0 zooms the canvas.
+  // event.code keeps the shortcuts working on non-US keyboard layouts.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (!event.ctrlKey && !event.metaKey) {
         return;
       }
-      if (event.key === "+" || event.key === "=") {
+      const code = event.code;
+      const key = event.key;
+      const zoomIn =
+        code === "Equal" ||
+        code === "NumpadAdd" ||
+        key === "+" ||
+        key === "=";
+      const zoomOut =
+        code === "Minus" ||
+        code === "NumpadSubtract" ||
+        key === "-" ||
+        key === "_";
+      const reset =
+        code === "Digit0" || code === "Numpad0" || key === "0";
+      if (zoomIn) {
         event.preventDefault();
         zoomAt(1.25);
-      } else if (event.key === "-" || event.key === "_") {
+      } else if (zoomOut) {
         event.preventDefault();
         zoomAt(0.8);
-      } else if (event.key === "0") {
+      } else if (reset) {
         event.preventDefault();
         applyZoom(1);
       }
@@ -228,6 +265,22 @@ export function EditorScreen({ onExit }: EditorScreenProps) {
           >
             Zoom {Math.round(zoom * 100)}%
           </span>
+          <button
+            type="button"
+            className="toolbar-button"
+            aria-label="Zoom out"
+            onClick={() => zoomAt(0.8)}
+          >
+            <Minus size={16} weight="bold" />
+          </button>
+          <button
+            type="button"
+            className="toolbar-button"
+            aria-label="Zoom in"
+            onClick={() => zoomAt(1.25)}
+          >
+            <Plus size={16} weight="bold" />
+          </button>
           <button
             type="button"
             className="toolbar-button"
