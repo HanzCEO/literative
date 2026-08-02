@@ -95,7 +95,7 @@ impl Default for CompletionSettings {
         Self {
             base_url: "https://api.openai.com/v1".into(),
             api_key: String::new(),
-            model: String::new(),
+            model: "deepseek-v4-flash".into(),
         }
     }
 }
@@ -223,7 +223,7 @@ mod tests {
           "params": {"width": 1024, "height": 1024, "steps": 8, "strength": 0.6, "cfgScale": 7.0, "sampler": "Euler a", "n": 1, "negativePrompt": ""}
         }"#;
         let parsed: AppSettings = serde_json::from_str(old_json).unwrap();
-        assert_eq!(parsed.completion.model, "");
+        assert_eq!(parsed.completion.model, "deepseek-v4-flash");
         assert_eq!(parsed.completion.base_url, "https://api.openai.com/v1");
         assert_eq!(parsed.theme, Theme::Light);
     }

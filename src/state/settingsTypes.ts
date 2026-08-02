@@ -93,7 +93,7 @@ export function defaultGlobalSettings(): GlobalSettings {
     completion: {
       baseUrl: "https://api.openai.com/v1",
       apiKey: "",
-      model: "",
+      model: "deepseek-v4-flash",
     },
   };
 }

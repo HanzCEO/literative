@@ -133,10 +133,9 @@ describe("settings surface", () => {
       screen.getByLabelText("Completion API key"),
       "agent-secret",
     );
-    await user.type(
-      screen.getByLabelText("Completion model"),
-      "agent-model-v2",
-    );
+    const model = screen.getByLabelText("Completion model");
+    await user.clear(model);
+    await user.type(model, "agent-model-v2");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
