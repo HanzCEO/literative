@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { PencilSimple, X } from "@phosphor-icons/react";
 import { loadImage } from "../lib/file";
 import type { GeneratedPoster } from "../lib/generation";
@@ -17,6 +17,8 @@ interface GenerationBoardProps {
   bottomInset: number;
   onEdit: () => void;
   onDismiss: () => void;
+  /** Reports the current zoom level so the host can show it in the navbar. */
+  onZoomChange?: (zoom: number) => void;
 }
 
 /**
@@ -32,14 +34,14 @@ export function GenerationBoard({
   bottomInset,
   onEdit,
   onDismiss,
+  onZoomChange,
 }: GenerationBoardProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const { settings } = useSettings();
-  const [zoom, setZoom] = useState(1);
 
   const drawRef = useRef<() => void>(() => {});
   const board = useBoardViewport(boardRef, {
-    onZoomChange: setZoom,
+    onZoomChange: (zoom: number) => onZoomChange?.(zoom),
     onRedraw: () => drawRef.current(),
     display: {
       vsync: settings?.vsync ?? true,
@@ -233,9 +235,6 @@ export function GenerationBoard({
     <>
       {result ? (
         <div className="result-overlay" data-testid="result-overlay">
-          <span className="result-meta">
-            {result.width} x {result.height} px
-          </span>
           <div className="result-actions">
             <button
               type="button"
@@ -256,18 +255,7 @@ export function GenerationBoard({
             </button>
           </div>
         </div>
-      ) : posterSize ? (
-        <span className="poster-frame-dimensions">
-          {posterSize.width} x {posterSize.height} px
-        </span>
       ) : null}
-      <span
-        className="board-zoom"
-        aria-label="Preview zoom level"
-        title="Scroll to zoom, drag to pan"
-      >
-        Zoom {Math.round(zoom * 100)}%
-      </span>
       {error && (
         <p className="generation-error" role="alert">
           {error}

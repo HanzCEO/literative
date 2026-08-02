@@ -118,6 +118,17 @@ describe("generation flow", () => {
     );
   });
 
+  it("shows the zoom level and poster size together in the navbar center", async () => {
+    await openEditor();
+    const zoom = screen.getByLabelText("Preview zoom level");
+    // The indicator lives inside the top app navbar, not the canvas.
+    expect(zoom.closest(".app-header")).not.toBeNull();
+    const center = zoom.parentElement;
+    expect(center).not.toBeNull();
+    expect(center).toHaveTextContent("Zoom 100%");
+    expect(center).toHaveTextContent("1024 x 1536 px");
+  });
+
   it("zooms the preview canvas with the wheel", async () => {
     await openEditor();
     const canvas = document.querySelector(".canvas-area")!;

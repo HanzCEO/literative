@@ -31,6 +31,7 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [backHovered, setBackHovered] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
   const boardRef = useRef<HTMLCanvasElement | null>(null);
 
   function resetGeneration() {
@@ -114,6 +115,11 @@ function Shell() {
 
   const inEditor = view === "editor" || view === "poster";
   const boardBottomInset = references.length > 0 ? 184 : 112;
+  const previewSize = result
+    ? `${result.width} x ${result.height} px`
+    : activeProject?.posterSize
+      ? `${activeProject.posterSize.width} x ${activeProject.posterSize.height} px`
+      : null;
 
   return (
     <div className="app">
@@ -134,6 +140,25 @@ function Shell() {
                 weight={backHovered ? "fill" : "regular"}
               />
             </button>
+          )}
+        </div>
+        <div className="header-center">
+          {view === "editor" && (
+            <>
+              <span
+                className="header-zoom"
+                aria-label="Preview zoom level"
+                title="Scroll to zoom, drag to pan"
+              >
+                Zoom {Math.round(previewZoom * 100)}%
+              </span>
+              {previewSize && (
+                <>
+                  <span className="header-zoom-divider" aria-hidden="true" />
+                  <span className="header-size">{previewSize}</span>
+                </>
+              )}
+            </>
           )}
         </div>
         <div className="header-actions">
@@ -191,6 +216,7 @@ function Shell() {
           bottomInset={boardBottomInset}
           onEdit={handleEdit}
           onDismiss={handleDismiss}
+          onZoomChange={setPreviewZoom}
         />
       )}
       {view === "editor" && (
