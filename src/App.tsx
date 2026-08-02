@@ -120,9 +120,11 @@ function Shell() {
           break;
       }
     };
-    void listenAgentEvents(handleEvent).then((stop) => {
-      unlisten = stop;
-    });
+    void listenAgentEvents(handleEvent)
+      .then((stop) => {
+        unlisten = stop;
+      })
+      .catch(() => undefined);
     return () => {
       disposed = true;
       unlisten?.();
