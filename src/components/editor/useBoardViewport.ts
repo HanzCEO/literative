@@ -13,6 +13,14 @@ const CHROME_SELECTOR = [
   ".result-overlay",
 ].join(", ");
 
+/** Read the theme background color so the board matches the app chrome. */
+function boardBackground(): string {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue("--bg")
+    .trim();
+  return value || "#eef0f4";
+}
+
 /** Live viewport state shared by every board draw. */
 export interface ViewportState {
   /** Device pixel ratio for backing the bitmap buffer. */
@@ -38,6 +46,8 @@ interface UseBoardViewportOptions {
   onZoomChange: (zoom: number) => void;
   /** Called to repaint the board after the viewport changes. */
   onRedraw: () => void;
+  /** Repaint pacing: vsync follows the display, maxFps caps the timer. */
+  display: { vsync: boolean; maxFps: number };
 }
 
 /**
@@ -48,7 +58,7 @@ interface UseBoardViewportOptions {
  */
 export function useBoardViewport(
   canvasRef: RefObject<HTMLCanvasElement | null>,
-  { onZoomChange, onRedraw }: UseBoardViewportOptions,
+  { onZoomChange, onRedraw, display }: UseBoardViewportOptions,
 ) {
   const state = useRef<ViewportState>({
     dpr: 1,
@@ -67,6 +77,7 @@ export function useBoardViewport(
   const fitCalcRef = useRef<(w: number, h: number) => number>(() => 0.1);
   const redrawRef = useRef(onRedraw);
   const zoomChangeRef = useRef(onZoomChange);
+  const displayRef = useRef(display);
   const spaceRef = useRef(false);
   const panningRef = useRef(false);
   const panDragRef = useRef<{
@@ -77,9 +88,14 @@ export function useBoardViewport(
   } | null>(null);
   const pendingPanRef = useRef<{ x: number; y: number } | null>(null);
   const panFrameRef = useRef<number | null>(null);
+  const panFrameKindRef = useRef<"raf" | "timeout" | null>(null);
+  const panCacheRef = useRef<HTMLCanvasElement | null>(null);
+  const panCacheValidRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
 
   redrawRef.current = onRedraw;
   zoomChangeRef.current = onZoomChange;
+  displayRef.current = display;
 
   /** Size the bitmap buffer and record the content box, then repaint. */
   useEffect(() => {
@@ -110,6 +126,7 @@ export function useBoardViewport(
       state.padTop = paddingTop;
       state.contentW = contentW;
       state.contentH = contentH;
+      panCacheValidRef.current = false;
       recomputeFit();
       redrawRef.current();
     };
@@ -221,6 +238,7 @@ export function useBoardViewport(
    */
   function setFitCalc(calc: (contentW: number, contentH: number) => number) {
     fitCalcRef.current = calc;
+    panCacheValidRef.current = false;
     recomputeFit();
   }
 
@@ -228,6 +246,7 @@ export function useBoardViewport(
   function setContent(width: number, height: number) {
     contentSize.current.w = width;
     contentSize.current.h = height;
+    panCacheValidRef.current = false;
   }
 
   /** Zoom around an anchor point in CSS pixels relative to the canvas. */
@@ -241,6 +260,7 @@ export function useBoardViewport(
     if (next === oldZoom) {
       return;
     }
+    panCacheValidRef.current = false;
     const anchorX = anchor ? anchor.x : state.contentW / 2;
     const anchorY = anchor ? anchor.y : state.contentH / 2;
     const docW = contentSize.current.w;
@@ -264,6 +284,7 @@ export function useBoardViewport(
 
   /** Reset zoom to fit and clear the pan offset. */
   function resetView() {
+    panCacheValidRef.current = false;
     state.zoom = 1;
     state.panX = 0;
     state.panY = 0;
@@ -310,12 +331,42 @@ export function useBoardViewport(
       panStartX: state.panX,
       panStartY: state.panY,
     };
+    panStartRef.current = { x: state.panX, y: state.panY };
     panningRef.current = true;
     state.interacting = true;
+    capturePanCache();
     updateCursor();
   }
 
-  // Coalesce moves into one repaint per animation frame: a synchronous
+  // Schedule the next pan repaint. With vsync on, requestAnimationFrame
+  // follows the display refresh; with vsync off, a timer enforces the
+  // configured max FPS cap.
+  function schedulePanFrame(applyPan: () => void): number {
+    const display = displayRef.current;
+    if (display.vsync && typeof requestAnimationFrame === "function") {
+      panFrameKindRef.current = "raf";
+      return requestAnimationFrame(applyPan);
+    }
+    panFrameKindRef.current = "timeout";
+    const fps = Math.min(Math.max(display.maxFps, 1), 240);
+    const interval = Math.max(1, Math.round(1000 / fps));
+    return window.setTimeout(applyPan, interval);
+  }
+
+  function cancelPanFrame() {
+    if (panFrameRef.current === null) {
+      return;
+    }
+    if (panFrameKindRef.current === "raf") {
+      cancelAnimationFrame(panFrameRef.current);
+    } else {
+      clearTimeout(panFrameRef.current);
+    }
+    panFrameRef.current = null;
+    panFrameKindRef.current = null;
+  }
+
+  // Coalesce moves into one repaint per scheduled frame. A synchronous
   // repaint per pointer event would starve the input stream, which makes
   // fast drags choppy and lets them undershoot the cursor.
   function movePan(clientX: number, clientY: number) {
@@ -328,6 +379,7 @@ export function useBoardViewport(
     }
     const applyPan = () => {
       panFrameRef.current = null;
+      panFrameKindRef.current = null;
       const pending = pendingPanRef.current;
       pendingPanRef.current = null;
       const drag = panDragRef.current;
@@ -336,26 +388,77 @@ export function useBoardViewport(
       }
       state.panX = drag.panStartX + (pending.x - drag.startX);
       state.panY = drag.panStartY + (pending.y - drag.startY);
+      if (panCacheValidRef.current && paintPanCache()) {
+        return;
+      }
       redrawRef.current();
     };
-    if (typeof requestAnimationFrame === "function") {
-      panFrameRef.current = requestAnimationFrame(applyPan);
-    } else {
-      applyPan();
+    panFrameRef.current = schedulePanFrame(applyPan);
+  }
+
+  // Snapshot the current frame at reduced resolution. Pan repaints then
+  // blit this snapshot instead of re-rendering the whole scene, which is
+  // what keeps the pan inside the display frame budget. The snapshot is
+  // captured at up to full resolution on standard screens and scaled
+  // down only on high-density screens.
+  function capturePanCache() {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
     }
+    const cache = panCacheRef.current ?? document.createElement("canvas");
+    panCacheRef.current = cache;
+    const dpr = state.dpr;
+    const cacheScale = Math.min(1, 1.5 / dpr);
+    const cacheWidth = Math.max(1, Math.round(canvas.width * cacheScale));
+    const cacheHeight = Math.max(1, Math.round(canvas.height * cacheScale));
+    if (cache.width !== cacheWidth || cache.height !== cacheHeight) {
+      cache.width = cacheWidth;
+      cache.height = cacheHeight;
+    }
+    const context = cache.getContext("2d");
+    if (!context) {
+      return;
+    }
+    context.setTransform(cacheScale, 0, 0, cacheScale, 0, 0);
+    context.drawImage(canvas, 0, 0);
+    panCacheValidRef.current = true;
+  }
+
+  // Blit the cached snapshot at the current pan offset and repaint the
+  // exposed strips. Returns false when there is no usable cache.
+  function paintPanCache(): boolean {
+    const canvas = canvasRef.current;
+    const cache = panCacheRef.current;
+    if (!canvas || !cache) {
+      return false;
+    }
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return false;
+    }
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.fillStyle = boardBackground();
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(
+      cache,
+      state.panX - panStartRef.current.x,
+      state.panY - panStartRef.current.y,
+      canvas.width,
+      canvas.height,
+    );
+    return true;
   }
 
   function endPan() {
     panDragRef.current = null;
     pendingPanRef.current = null;
-    if (panFrameRef.current !== null) {
-      cancelAnimationFrame(panFrameRef.current);
-      panFrameRef.current = null;
-    }
+    cancelPanFrame();
     panningRef.current = false;
     state.interacting = false;
+    panCacheValidRef.current = false;
     updateCursor();
-    // Restore the drop shadow that the drag dropped for speed.
+    // Repaint at full resolution with the drop shadow restored.
     redrawRef.current();
   }
 

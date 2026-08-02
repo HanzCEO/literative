@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { PencilSimple, X } from "@phosphor-icons/react";
 import { loadImage } from "../lib/file";
 import type { GeneratedPoster } from "../lib/generation";
+import { useSettings } from "../state/SettingsContext";
 import { FIT_PADDING, useBoardViewport } from "./editor/useBoardViewport";
 
 const POSTER_RADIUS = 12;
@@ -33,12 +34,17 @@ export function GenerationBoard({
   onDismiss,
 }: GenerationBoardProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const { settings } = useSettings();
   const [zoom, setZoom] = useState(1);
 
   const drawRef = useRef<() => void>(() => {});
   const board = useBoardViewport(boardRef, {
     onZoomChange: setZoom,
     onRedraw: () => drawRef.current(),
+    display: {
+      vsync: settings?.vsync ?? true,
+      maxFps: settings?.maxFps ?? 60,
+    },
   });
 
   // Repaint the board: the poster frame, or the generated poster when a

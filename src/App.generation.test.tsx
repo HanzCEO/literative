@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
+import { defaultGlobalSettings } from "./state/settingsTypes";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -13,6 +14,47 @@ vi.mock("@tauri-apps/api/webview", () => ({
 }));
 
 const mockedInvoke = vi.mocked(invoke);
+
+/** Replace the canvas 2D context with a stub that records drawImage calls. */
+function recordCanvasContext() {
+  const blits: number[][] = [];
+  const target: Record<string, unknown> = {
+    drawImage: (...args: unknown[]) => blits.push(args as number[]),
+  };
+  const stub = new Proxy(target, {
+    get(_, prop) {
+      if (prop === "canvas") {
+        return { width: 300, height: 150 };
+      }
+      if (prop === "drawImage") {
+        return target.drawImage;
+      }
+      if (typeof prop === "string" && !(prop in target)) {
+        target[prop] = () => {};
+      }
+      return target[prop as string];
+    },
+    set(_, prop, value) {
+      target[prop as string] = value;
+      return true;
+    },
+  }) as unknown as CanvasRenderingContext2D;
+  const spy = vi
+    .spyOn(HTMLCanvasElement.prototype, "getContext")
+    .mockReturnValue(stub);
+  return { blits, spy };
+}
+
+/** Offset of the latest pan blit: drawImage(cache, dx, dy, w, h). */
+function lastBlitOffset(blits: number[][]): number {
+  const fiveArg = blits.filter((args) => args.length === 5);
+  const last = fiveArg[fiveArg.length - 1];
+  return (last?.[1] as number) ?? 0;
+}
+
+function panBlitCount(blits: number[][]): number {
+  return blits.filter((args) => args.length === 5).length;
+}
 
 /** Create a project through onboarding and wait for the editor. */
 async function openEditor() {
@@ -102,39 +144,9 @@ describe("generation flow", () => {
   });
 
   it("pans the viewport by the full drag distance", async () => {
-    // Record the last setTransform of each repaint so the test can assert
-    // that the pan offset moves one CSS pixel per CSS pixel of drag.
-    const transforms: number[][] = [];
-    const target: Record<string, unknown> = {
-      setTransform: (...args: number[]) => transforms.push(args),
-    };
-    const stub = new Proxy(target, {
-      get(_, prop) {
-        if (prop === "canvas") {
-          return { width: 300, height: 150 };
-        }
-        if (prop === "setTransform") {
-          return target.setTransform;
-        }
-        if (typeof prop === "string" && !(prop in target)) {
-          target[prop] = () => {};
-        }
-        return target[prop as string];
-      },
-      set(_, prop, value) {
-        target[prop as string] = value;
-        return true;
-      },
-    }) as unknown as CanvasRenderingContext2D;
-    const getContextSpy = vi
-      .spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue(stub);
+    const { blits, spy } = recordCanvasContext();
     await openEditor();
     const canvas = document.querySelector(".canvas-area")!;
-    const lastTranslateX = () => {
-      const last = transforms[transforms.length - 1];
-      return (last[4] as number) ?? 0;
-    };
     vi.useFakeTimers();
     try {
       fireEvent.pointerDown(canvas, {
@@ -156,7 +168,7 @@ describe("generation flow", () => {
         pointerId: 1,
       });
       vi.advanceTimersByTime(16);
-      const before = lastTranslateX();
+      const before = lastBlitOffset(blits);
       fireEvent.pointerMove(canvas, {
         clientX: 480,
         clientY: 100,
@@ -164,12 +176,53 @@ describe("generation flow", () => {
         pointerId: 1,
       });
       vi.advanceTimersByTime(16);
-      const after = lastTranslateX();
+      const after = lastBlitOffset(blits);
       // A 30px drag must move the content by exactly 30 CSS pixels.
       expect(after - before).toBeCloseTo(30, 5);
     } finally {
       vi.useRealTimers();
-      getContextSpy.mockRestore();
+      spy.mockRestore();
+    }
+  });
+
+  it("caps the pan repaints at the configured max FPS", async () => {
+    mockedInvoke.mockImplementation((command: string) => {
+      if (command === "get_app_settings") {
+        return Promise.resolve({
+          ...defaultGlobalSettings(),
+          vsync: false,
+          maxFps: 30,
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+    const { blits, spy } = recordCanvasContext();
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(canvas, {
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 200,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      // 16ms is inside the 33ms interval of a 30 FPS cap: no repaint yet.
+      vi.advanceTimersByTime(16);
+      expect(panBlitCount(blits)).toBe(0);
+      // The timer fires after 33ms and paints the full 100px of travel.
+      vi.advanceTimersByTime(17);
+      expect(panBlitCount(blits)).toBe(1);
+      expect(lastBlitOffset(blits)).toBeCloseTo(100, 5);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
     }
   });
 

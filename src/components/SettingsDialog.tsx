@@ -251,6 +251,8 @@ function GlobalSettingsDialog({ onClose }: { onClose: () => void }) {
         endpoint: draft.endpoint.trim(),
         apiKey: draft.apiKey,
         model: draft.model.trim(),
+        vsync: draft.vsync,
+        maxFps: clampInt(draft.maxFps, 15, 240, 60),
         params: {
           ...draft.params,
           width: clampInt(draft.params.width, 256, 4096, 1024),
@@ -336,6 +338,41 @@ function GlobalSettingsDialog({ onClose }: { onClose: () => void }) {
             }
           />
           <GenerationParamsFields params={draft.params} onChange={patchParams} />
+        </div>
+        <div className="dialog-section">
+          <h3 className="dialog-section-title">Performance</h3>
+          <p className="dialog-hint">
+            Controls how often the drawing board repaints while you pan.
+          </p>
+          <label className="dialog-field dialog-field-row">
+            <span className="dialog-label">V Sync</span>
+            <input
+              type="checkbox"
+              checked={draft.vsync}
+              onChange={(event) => patch({ vsync: event.target.checked })}
+              aria-label="V Sync"
+            />
+          </label>
+          <label className="dialog-field">
+            <span className="dialog-label">Max FPS</span>
+            <input
+              type="number"
+              min={15}
+              max={240}
+              value={draft.maxFps}
+              disabled={draft.vsync}
+              onChange={(event) =>
+                patch({ maxFps: Number(event.target.value) })
+              }
+              aria-label="Max FPS"
+            />
+            {draft.vsync && (
+              <p className="dialog-hint">
+                Off while V Sync is on: repaints follow the display refresh
+                rate.
+              </p>
+            )}
+          </label>
         </div>
         {error && (
           <p className="dialog-error" role="alert">

@@ -161,6 +161,59 @@ describe("settings surface", () => {
     ).toBeUndefined();
   });
 
+  it("shows vsync on and max FPS disabled by default", async () => {
+    await openSettings();
+    expect(screen.getByLabelText("V Sync")).toBeChecked();
+    const maxFps = screen.getByLabelText("Max FPS") as HTMLInputElement;
+    expect(maxFps).toBeDisabled();
+    expect(maxFps).toHaveValue(60);
+  });
+
+  it("enables max FPS when vsync is off and saves it", async () => {
+    const user = userEvent.setup();
+    mockedInvoke.mockResolvedValue(defaultGlobalSettings());
+    await openSettings();
+    const vsync = screen.getByLabelText("V Sync");
+    await user.click(vsync);
+    expect(vsync).not.toBeChecked();
+    const maxFps = screen.getByLabelText("Max FPS");
+    expect(maxFps).toBeEnabled();
+    await user.clear(maxFps);
+    await user.type(maxFps, "30");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    const saveCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "save_app_settings",
+    );
+    expect(saveCall).toBeDefined();
+    const args = saveCall![1] as {
+      settings: { vsync: boolean; maxFps: number };
+    };
+    expect(args.settings.vsync).toBe(false);
+    expect(args.settings.maxFps).toBe(30);
+  });
+
+  it("clamps max FPS on save", async () => {
+    const user = userEvent.setup();
+    mockedInvoke.mockResolvedValue(defaultGlobalSettings());
+    await openSettings();
+    await user.click(screen.getByLabelText("V Sync"));
+    const maxFps = screen.getByLabelText("Max FPS");
+    await user.clear(maxFps);
+    await user.type(maxFps, "5");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    const saveCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "save_app_settings",
+    );
+    const args = saveCall![1] as { settings: { maxFps: number } };
+    expect(args.settings.maxFps).toBe(15);
+  });
+
   it("closes when the backdrop is clicked", async () => {
     await openSettings();
     const overlay = document.querySelector(".dialog-overlay");

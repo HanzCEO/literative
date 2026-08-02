@@ -7,6 +7,7 @@ import {
   type RefObject,
 } from "react";
 import { loadImage } from "../../lib/file";
+import { useSettings } from "../../state/SettingsContext";
 import {
   estimateTextWidth,
   hitTestLayer,
@@ -49,6 +50,7 @@ export function PosterCanvas({
   ref,
 }: PosterCanvasProps) {
   const loadedImages = useRef(new Map<string, HTMLImageElement>());
+  const { settings } = useSettings();
   const docRef = useRef(document);
   const selectedRef = useRef(selectedId);
   const onSelectRef = useRef(onSelect);
@@ -71,6 +73,10 @@ export function PosterCanvas({
   const board = useBoardViewport(canvasRef, {
     onZoomChange,
     onRedraw: () => drawRef.current(),
+    display: {
+      vsync: settings?.vsync ?? true,
+      maxFps: settings?.maxFps ?? 60,
+    },
   });
 
   // Repaint the whole board. The draw transform maps document pixels to

@@ -26,6 +26,10 @@ export interface GlobalSettings {
   apiKey: string;
   model: string;
   theme: ThemeName;
+  /** Sync board repaints to the display refresh rate. */
+  vsync: boolean;
+  /** Target repaint rate when vsync is off. */
+  maxFps: number;
   params: GenerationParams;
 }
 
@@ -74,6 +78,8 @@ export function defaultGlobalSettings(): GlobalSettings {
     apiKey: "",
     model: "",
     theme: "light",
+    vsync: true,
+    maxFps: 60,
     params: { ...PRESET_PARAMS.krea_2_turbo },
   };
 }

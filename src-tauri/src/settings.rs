@@ -89,6 +89,10 @@ pub struct AppSettings {
     pub api_key: String,
     pub model: String,
     pub theme: Theme,
+    /// Sync board repaints to the display refresh rate.
+    pub vsync: bool,
+    /// Target repaint rate when vsync is off.
+    pub max_fps: u32,
     pub params: GenerationParams,
 }
 
@@ -101,6 +105,8 @@ impl Default for AppSettings {
             api_key: String::new(),
             model: String::new(),
             theme: Theme::Light,
+            vsync: true,
+            max_fps: 60,
             params: GenerationParams::default(),
         }
     }
@@ -146,6 +152,8 @@ mod tests {
             api_key: "secret".into(),
             model: String::new(),
             theme: Theme::Dark,
+            vsync: false,
+            max_fps: 30,
             params: GenerationParams {
                 width: 512,
                 height: 768,
@@ -181,6 +189,8 @@ mod tests {
             api_key: "".into(),
             model: "".into(),
             theme: Theme::Dark,
+            vsync: true,
+            max_fps: 60,
             params: GenerationParams::default(),
         };
         settings.save(&path).unwrap();
