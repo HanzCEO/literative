@@ -15,6 +15,42 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 const mockedInvoke = vi.mocked(invoke);
 const mockedSave = vi.mocked(save);
 
+/** Replace the canvas 2D context with a stub that records transforms. */
+function recordEditorTransforms() {
+  const transforms: number[][] = [];
+  const target: Record<string, unknown> = {
+    setTransform: (...args: number[]) => transforms.push(args),
+  };
+  const stub = new Proxy(target, {
+    get(_, prop) {
+      if (prop === "canvas") {
+        return { width: 300, height: 150 };
+      }
+      if (typeof prop === "string" && prop in target) {
+        return target[prop];
+      }
+      if (typeof prop === "string") {
+        target[prop] = () => {};
+      }
+      return target[prop as string];
+    },
+    set(_, prop, value) {
+      target[prop as string] = value;
+      return true;
+    },
+  }) as unknown as CanvasRenderingContext2D;
+  const spy = vi
+    .spyOn(HTMLCanvasElement.prototype, "getContext")
+    .mockReturnValue(stub);
+  return { transforms, spy };
+}
+
+/** Horizontal offset (e component) of the latest content transform. */
+function lastTransformOffset(transforms: number[][]): number {
+  const last = transforms[transforms.length - 1];
+  return (last?.[4] as number) ?? 0;
+}
+
 /** Create a project through onboarding and wait for the editor. */
 async function openEditor() {
   render(<App />);
@@ -333,9 +369,12 @@ describe("poster editor", () => {
     expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
   });
 
-  it("pans the viewport with the middle button", async () => {
+  it("ignores the middle button", async () => {
     await enterEditor();
     const canvas = document.querySelector(".canvas-area")!;
+    const rows = screen.getAllByTestId(/layer-row-/);
+    await userEvent.click(rows[0]);
+    expect(rows[0]).toHaveClass("layer-row-selected");
     fireEvent.pointerDown(canvas, {
       clientX: 400,
       clientY: 300,
@@ -349,7 +388,85 @@ describe("poster editor", () => {
       pointerId: 1,
     });
     fireEvent.pointerUp(canvas, { button: 1, pointerId: 1 });
-    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+    // The middle button never pans: no grab cursor, selection untouched.
+    expect((canvas as HTMLCanvasElement).style.cursor).toBe("");
+    expect(rows[0]).toHaveClass("layer-row-selected");
+  });
+
+  it("selects and drags the poster sheet", async () => {
+    const user = userEvent.setup();
+    // Give the canvas a size so hit-testing maps to document space.
+    const widthSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientWidth", "get")
+      .mockReturnValue(300);
+    const heightSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientHeight", "get")
+      .mockReturnValue(150);
+    await enterEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    // Select the base layer first; clicking the sheet must clear it.
+    const rows = screen.getAllByTestId(/layer-row-/);
+    await user.click(rows[0]);
+    expect(rows[0]).toHaveClass("layer-row-selected");
+    // (150, 100) maps inside the sheet but below the 1024x768 image.
+    fireEvent.pointerDown(canvas, {
+      clientX: 150,
+      clientY: 100,
+      button: 0,
+      pointerId: 1,
+    });
+    expect((canvas as HTMLCanvasElement).style.cursor).toBe("move");
+    fireEvent.pointerMove(canvas, {
+      clientX: 180,
+      clientY: 130,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+    expect((canvas as HTMLCanvasElement).style.cursor).toBe("");
+    // The sheet click cleared the layer selection.
+    expect(rows[0]).not.toHaveClass("layer-row-selected");
+    widthSpy.mockRestore();
+    heightSpy.mockRestore();
+  });
+
+  it("keeps the sheet position across later document edits", async () => {
+    const { transforms, spy } = recordEditorTransforms();
+    const widthSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientWidth", "get")
+      .mockReturnValue(300);
+    const heightSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientHeight", "get")
+      .mockReturnValue(150);
+    await enterEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    vi.useFakeTimers();
+    try {
+      // Drag the sheet right by 30 CSS pixels from inside the frame.
+      fireEvent.pointerDown(canvas, {
+        clientX: 150,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 180,
+        clientY: 130,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+      const afterDrag = lastTransformOffset(transforms);
+      // A later document edit must not snap the sheet back to center.
+      fireEvent.click(screen.getByRole("button", { name: "Add text" }));
+      expect(lastTransformOffset(transforms)).toBeCloseTo(afterDrag, 5);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
   });
 
   it("deselects when dragging empty space", async () => {

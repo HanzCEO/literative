@@ -27,7 +27,12 @@ interface PosterCanvasProps {
   document: PosterDocument;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /** True when the poster sheet itself is selected on the board. */
+  sheetSelected: boolean;
+  onSheetSelect: (selected: boolean) => void;
   onMoveLayer: (id: string, x: number, y: number) => void;
+  /** Persist the sheet position on the board when a sheet drag ends. */
+  onSheetMove: (x: number, y: number) => void;
   onZoomChange: (zoom: number) => void;
   /** The shared drawing board canvas that this component draws on. */
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -44,7 +49,10 @@ export function PosterCanvas({
   document,
   selectedId,
   onSelect,
+  sheetSelected,
+  onSheetSelect,
   onMoveLayer,
+  onSheetMove,
   onZoomChange,
   canvasRef,
   ref,
@@ -53,8 +61,12 @@ export function PosterCanvas({
   const { settings } = useSettings();
   const docRef = useRef(document);
   const selectedRef = useRef(selectedId);
+  const sheetSelectedRef = useRef(sheetSelected);
   const onSelectRef = useRef(onSelect);
+  const onSheetSelectRef = useRef(onSheetSelect);
   const onMoveLayerRef = useRef(onMoveLayer);
+  const onSheetMoveRef = useRef(onSheetMove);
+  const sheetDragRef = useRef(false);
   const dragRef = useRef<{
     kind: "layer";
     layerId: string;
@@ -66,8 +78,11 @@ export function PosterCanvas({
 
   docRef.current = document;
   selectedRef.current = selectedId;
+  sheetSelectedRef.current = sheetSelected;
   onSelectRef.current = onSelect;
+  onSheetSelectRef.current = onSheetSelect;
   onMoveLayerRef.current = onMoveLayer;
+  onSheetMoveRef.current = onSheetMove;
 
   const drawRef = useRef<() => void>(() => {});
   const board = useBoardViewport(canvasRef, {
@@ -99,8 +114,14 @@ export function PosterCanvas({
     context.fillRect(0, 0, canvas.width, canvas.height);
 
     const scale = vp.baseFit * vp.zoom;
-    const offsetX = vp.panX + (vp.contentW - doc.width * scale) / 2;
-    const offsetY = vp.panY + (vp.contentH - doc.height * scale) / 2;
+    const offsetX =
+      vp.panX +
+      (vp.contentW - doc.width * scale) / 2 +
+      vp.sheetX * scale;
+    const offsetY =
+      vp.panY +
+      (vp.contentH - doc.height * scale) / 2 +
+      vp.sheetY * scale;
     context.setTransform(
       vp.dpr * scale,
       0,
@@ -172,11 +193,29 @@ export function PosterCanvas({
     }
     context.globalAlpha = 1;
     context.globalCompositeOperation = "source-over";
+    // The poster sheet selection outline, just outside the frame.
+    if (sheetSelectedRef.current) {
+      context.save();
+      context.strokeStyle = "#4f8cff";
+      context.lineWidth = 2 / scale;
+      context.setLineDash([6 / scale, 4 / scale]);
+      roundRectPath(
+        context,
+        -8,
+        -8,
+        doc.width + 16,
+        doc.height + 16,
+        POSTER_RADIUS + 8,
+      );
+      context.stroke();
+      context.restore();
+    }
   }, [board]);
   drawRef.current = draw;
 
-  // Fit the poster into the board; the viewport hook measures the canvas
-  // and owns the pan and zoom state.
+  // Fit the poster into the board; the hook measures the canvas and
+  // owns the pan, zoom, and sheet position. The stored sheet position
+  // is adopted back so the frame stays where the user left it.
   useEffect(() => {
     const doc = docRef.current;
     board.setContent(doc.width, doc.height);
@@ -187,6 +226,7 @@ export function PosterCanvas({
           (contentH - FIT_PADDING * 2) / doc.height,
         ),
     );
+    board.setSheetOffset(doc.sheetX ?? 0, doc.sheetY ?? 0);
     draw();
   }, [document, board, draw]);
 
@@ -226,26 +266,32 @@ export function PosterCanvas({
   }, [document, selectedId, draw]);
 
   // Pointer interactions on the shared canvas: select and drag layers,
-  // pan on empty space, and reset the view on double-click.
+  // select and drag the poster sheet, pan with Space plus the left
+  // button, and reset the view on double-click.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
-      if (event.button === 1) {
+      if (event.button !== 0) {
+        // Middle and right buttons never touch the content.
         event.preventDefault();
+        return;
       }
       canvas.setPointerCapture?.(event.pointerId);
-      const panOverride = board.isPanOverride(event.button);
+      if (board.isPanOverride(event.button)) {
+        // Space held: the drag pans the viewport, not the content.
+        board.beginPan(event.clientX, event.clientY);
+        return;
+      }
       const point = board.toDocPoint(event.clientX, event.clientY);
-      const id = panOverride
-        ? null
-        : hitTestLayer(docRef.current, point.x, point.y);
+      const id = hitTestLayer(docRef.current, point.x, point.y);
       if (id) {
         const layer = docRef.current.layers.find((item) => item.id === id);
         if (layer) {
           onSelectRef.current(id);
+          onSheetSelectRef.current(false);
           dragRef.current = {
             kind: "layer",
             layerId: id,
@@ -257,15 +303,34 @@ export function PosterCanvas({
         }
         return;
       }
-      if (!panOverride) {
+      const doc = docRef.current;
+      const onSheet =
+        point.x >= 0 &&
+        point.x <= doc.width &&
+        point.y >= 0 &&
+        point.y <= doc.height;
+      if (onSheet) {
+        // The poster sheet itself: select it and drag it on the board.
         onSelectRef.current(null);
+        selectedRef.current = null;
+        onSheetSelectRef.current(true);
+        sheetSelectedRef.current = true;
+        sheetDragRef.current = true;
+        drawRef.current();
+        board.beginSheetDrag(event.clientX, event.clientY);
+        return;
       }
-      board.beginPan(event.clientX, event.clientY);
+      // Empty board: clear the selection; the board does not pan here.
+      onSelectRef.current(null);
+      selectedRef.current = null;
+      onSheetSelectRef.current(false);
+      sheetSelectedRef.current = false;
+      drawRef.current();
     };
     const handlePointerMove = (event: PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) {
-        board.movePan(event.clientX, event.clientY);
+        board.moveDrag(event.clientX, event.clientY);
         return;
       }
       const point = board.toDocPoint(event.clientX, event.clientY);
@@ -277,7 +342,15 @@ export function PosterCanvas({
     };
     const handlePointerUp = () => {
       dragRef.current = null;
-      board.endPan();
+      if (sheetDragRef.current) {
+        sheetDragRef.current = false;
+        // Store the position in the document so later edits keep it.
+        onSheetMoveRef.current(
+          board.viewport.sheetX,
+          board.viewport.sheetY,
+        );
+      }
+      board.endDrag();
     };
     const handleDoubleClick = (event: MouseEvent) => {
       const point = board.toDocPoint(event.clientX, event.clientY);

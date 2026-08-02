@@ -57,6 +57,9 @@ export interface PosterDocument {
   height: number;
   /** Index 0 is the bottom layer. */
   layers: Layer[];
+  /** Position of the sheet on the board, in document pixels. */
+  sheetX: number;
+  sheetY: number;
 }
 
 let idCounter = 0;
@@ -67,7 +70,7 @@ function nextId(): string {
 }
 
 export function createDocument(width: number, height: number): PosterDocument {
-  return { width, height, layers: [] };
+  return { width, height, layers: [], sheetX: 0, sheetY: 0 };
 }
 
 /** Create a document whose base layer is an image covering the full canvas. */

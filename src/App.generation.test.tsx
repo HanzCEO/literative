@@ -138,9 +138,10 @@ describe("generation flow", () => {
     );
   });
 
-  it("pans the preview canvas by dragging", async () => {
+  it("pans the preview canvas with a Space drag", async () => {
     await openEditor();
     const canvas = document.querySelector(".canvas-area")!;
+    fireEvent.keyDown(window, { code: "Space" });
     fireEvent.pointerDown(canvas, {
       clientX: 400,
       clientY: 300,
@@ -154,6 +155,7 @@ describe("generation flow", () => {
       pointerId: 1,
     });
     fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+    fireEvent.keyUp(window, { code: "Space" });
     // Panning keeps the zoom level unchanged.
     expect(screen.getByLabelText("Preview zoom level")).toHaveTextContent(
       "Zoom 100%",
@@ -165,6 +167,7 @@ describe("generation flow", () => {
     await openEditor();
     const canvas = document.querySelector(".canvas-area")!;
     vi.useFakeTimers();
+    fireEvent.keyDown(window, { code: "Space" });
     try {
       fireEvent.pointerDown(canvas, {
         clientX: 100,
@@ -197,6 +200,7 @@ describe("generation flow", () => {
       // A 30px drag must move the content by exactly 30 CSS pixels.
       expect(after - before).toBeCloseTo(30, 5);
     } finally {
+      fireEvent.keyUp(window, { code: "Space" });
       vi.useRealTimers();
       spy.mockRestore();
     }
@@ -219,6 +223,7 @@ describe("generation flow", () => {
     await openEditor();
     const canvas = document.querySelector(".canvas-area")!;
     vi.useFakeTimers();
+    fireEvent.keyDown(window, { code: "Space" });
     try {
       fireEvent.pointerDown(canvas, {
         clientX: 100,
@@ -259,6 +264,7 @@ describe("generation flow", () => {
       vi.advanceTimersByTime(16);
       expect(lastBlitOffset(blits)).toBeCloseTo(60, 5);
     } finally {
+      fireEvent.keyUp(window, { code: "Space" });
       vi.useRealTimers();
       spy.mockRestore();
       widthSpy.mockRestore();
@@ -270,11 +276,80 @@ describe("generation flow", () => {
     }
   });
 
+  it("does not pan with a plain left drag", async () => {
+    const { blits, spy } = recordCanvasContext();
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    vi.useFakeTimers();
+    try {
+      // Start on empty board space, outside the placeholder frame.
+      fireEvent.pointerDown(canvas, {
+        clientX: 60,
+        clientY: 140,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 200,
+        clientY: 140,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(50);
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+      expect(panBlitCount(blits)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
+    }
+  });
+
+  it("drags the poster sheet with the left button", async () => {
+    const { blits, spy } = recordCanvasContext();
+    // Give the canvas a size so the placeholder frame has a real place.
+    const widthSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientWidth", "get")
+      .mockReturnValue(300);
+    const heightSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientHeight", "get")
+      .mockReturnValue(150);
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    vi.useFakeTimers();
+    try {
+      // (150, 75) lands inside the placeholder frame.
+      fireEvent.pointerDown(canvas, {
+        clientX: 150,
+        clientY: 75,
+        button: 0,
+        pointerId: 1,
+      });
+      expect((canvas as HTMLCanvasElement).style.cursor).toBe("move");
+      fireEvent.pointerMove(canvas, {
+        clientX: 180,
+        clientY: 90,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      // The sheet drag shifts the cached frame, exactly like a pan.
+      expect(panBlitCount(blits)).toBeGreaterThan(0);
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+      expect((canvas as HTMLCanvasElement).style.cursor).toBe("");
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
+  });
+
   it("re-renders the exposed strip so cut-off objects come into view", async () => {
     const { blits, rects, clips, spy } = recordCanvasContext();
     await openEditor();
     const canvas = document.querySelector(".canvas-area")!;
     vi.useFakeTimers();
+    fireEvent.keyDown(window, { code: "Space" });
     try {
       fireEvent.pointerDown(canvas, {
         clientX: 100,
@@ -296,6 +371,7 @@ describe("generation flow", () => {
       expect(rects).toContainEqual([0, 0, 30, 150]);
       expect(clips.length).toBeGreaterThan(0);
     } finally {
+      fireEvent.keyUp(window, { code: "Space" });
       vi.useRealTimers();
       spy.mockRestore();
     }
@@ -316,6 +392,7 @@ describe("generation flow", () => {
     await openEditor();
     const canvas = document.querySelector(".canvas-area")!;
     vi.useFakeTimers();
+    fireEvent.keyDown(window, { code: "Space" });
     try {
       fireEvent.pointerDown(canvas, {
         clientX: 100,
@@ -337,6 +414,7 @@ describe("generation flow", () => {
       expect(panBlitCount(blits)).toBe(1);
       expect(lastBlitOffset(blits)).toBeCloseTo(100, 5);
     } finally {
+      fireEvent.keyUp(window, { code: "Space" });
       vi.useRealTimers();
       spy.mockRestore();
     }

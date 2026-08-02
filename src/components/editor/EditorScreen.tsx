@@ -28,7 +28,9 @@ export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
   const {
     document,
     selectedId,
+    sheetSelected,
     selectLayer,
+    selectSheet,
     addImageLayer,
     addTextLayer,
     updateLayer,
@@ -126,8 +128,11 @@ export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
       width: current.width,
       height: current.height,
       layers: [],
+      sheetX: 0,
+      sheetY: 0,
     });
     selectLayer(null);
+    selectSheet(false);
   }
 
   return (
@@ -137,8 +142,21 @@ export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
         canvasRef={boardRef}
         document={document}
         selectedId={selectedId}
+        sheetSelected={sheetSelected}
         onSelect={selectLayer}
+        onSheetSelect={selectSheet}
         onMoveLayer={(id, x, y) => updateLayer(id, { x, y })}
+        onSheetMove={(x, y) =>
+          setDocument((current) =>
+            current
+              ? {
+                  ...current,
+                  sheetX: Math.round(x),
+                  sheetY: Math.round(y),
+                }
+              : current,
+          )
+        }
         onZoomChange={setZoom}
       />
       {document.layers.length === 0 && (

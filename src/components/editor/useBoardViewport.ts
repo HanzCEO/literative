@@ -37,7 +37,10 @@ export interface ViewportState {
   /** User pan offset in CSS pixels. */
   panX: number;
   panY: number;
-  /** True while a pan drag is active; views drop expensive effects. */
+  /** Position of the sheet on the board, in document pixels. */
+  sheetX: number;
+  sheetY: number;
+  /** True while a pan or sheet drag is active; views drop effects. */
   interacting: boolean;
 }
 
@@ -69,6 +72,8 @@ export function useBoardViewport(
     zoom: 1,
     panX: 0,
     panY: 0,
+    sheetX: 0,
+    sheetY: 0,
     interacting: false,
   }).current;
   /** Size of the content in document pixels, set by each view. */
@@ -80,18 +85,22 @@ export function useBoardViewport(
   const displayRef = useRef(display);
   const spaceRef = useRef(false);
   const panningRef = useRef(false);
-  const panDragRef = useRef<{
+  const dragRef = useRef<{
+    kind: "pan" | "sheet";
     startX: number;
     startY: number;
     panStartX: number;
     panStartY: number;
+    sheetStartX: number;
+    sheetStartY: number;
   } | null>(null);
+  const dragKindRef = useRef<"pan" | "sheet" | null>(null);
   const pendingPanRef = useRef<{ x: number; y: number } | null>(null);
   const panFrameRef = useRef<number | null>(null);
   const panFrameKindRef = useRef<"raf" | "timeout" | null>(null);
   const panCacheRef = useRef<HTMLCanvasElement | null>(null);
   const panCacheValidRef = useRef(false);
-  const panStartRef = useRef({ x: 0, y: 0 });
+  const frameStartRef = useRef({ x: 0, y: 0 });
 
   redrawRef.current = onRedraw;
   zoomChangeRef.current = onZoomChange;
@@ -201,7 +210,7 @@ export function useBoardViewport(
     };
     const handleBlur = () => {
       spaceRef.current = false;
-      endPan();
+      endDrag();
     };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -220,9 +229,11 @@ export function useBoardViewport(
     }
     canvas.style.cursor = spaceRef.current
       ? "grab"
-      : panningRef.current
-        ? "grabbing"
-        : "";
+      : dragKindRef.current === "sheet"
+        ? "move"
+        : panningRef.current
+          ? "grabbing"
+          : "";
   }
 
   function recomputeFit() {
@@ -282,12 +293,14 @@ export function useBoardViewport(
     redrawRef.current();
   }
 
-  /** Reset zoom to fit and clear the pan offset. */
+  /** Reset zoom to fit, clear the pan offset, and re-center the sheet. */
   function resetView() {
     panCacheValidRef.current = false;
     state.zoom = 1;
     state.panX = 0;
     state.panY = 0;
+    state.sheetX = 0;
+    state.sheetY = 0;
     zoomChangeRef.current(1);
     redrawRef.current();
   }
@@ -302,9 +315,13 @@ export function useBoardViewport(
     const docW = contentSize.current.w;
     const docH = contentSize.current.h;
     const offsetX =
-      state.panX + (state.contentW - docW * state.baseFit * state.zoom) / 2;
+      state.panX +
+      (state.contentW - docW * state.baseFit * state.zoom) / 2 +
+      state.sheetX * state.baseFit * state.zoom;
     const offsetY =
-      state.panY + (state.contentH - docH * state.baseFit * state.zoom) / 2;
+      state.panY +
+      (state.contentH - docH * state.baseFit * state.zoom) / 2 +
+      state.sheetY * state.baseFit * state.zoom;
     return {
       x: (clientX - rect.left - offsetX) / (state.baseFit * state.zoom),
       y:
@@ -313,29 +330,62 @@ export function useBoardViewport(
     };
   }
 
-  /**
-   * True when a pointer press should pan the viewport instead of touching
-   * content: any button but the left one, or Space held.
-   */
-  function isPanOverride(button: number): boolean {
-    return button !== 0 || spaceRef.current;
+  // The screen-space origin of the content: the pan offset, the centered
+  // fit, and the sheet's own position on the board.
+  function drawOffsetX(): number {
+    return (
+      state.panX +
+      (state.contentW - contentSize.current.w * state.baseFit * state.zoom) /
+        2 +
+      state.sheetX * state.baseFit * state.zoom
+    );
   }
 
-  function beginPan(clientX: number, clientY: number) {
-    if (panDragRef.current) {
+  function drawOffsetY(): number {
+    return (
+      state.panY +
+      (state.contentH - contentSize.current.h * state.baseFit * state.zoom) /
+        2 +
+      state.sheetY * state.baseFit * state.zoom
+    );
+  }
+
+  /**
+   * True when a pointer press should pan the viewport instead of touching
+   * content: the space bar plus the left button is the only pan gesture.
+   */
+  function isPanOverride(_button: number): boolean {
+    return spaceRef.current;
+  }
+
+  function beginDrag(clientX: number, clientY: number, kind: "pan" | "sheet") {
+    if (dragRef.current) {
       return;
     }
-    panDragRef.current = {
+    dragRef.current = {
+      kind,
       startX: clientX,
       startY: clientY,
       panStartX: state.panX,
       panStartY: state.panY,
+      sheetStartX: state.sheetX,
+      sheetStartY: state.sheetY,
     };
-    panStartRef.current = { x: state.panX, y: state.panY };
+    dragKindRef.current = kind;
     panningRef.current = true;
     state.interacting = true;
+    frameStartRef.current = { x: drawOffsetX(), y: drawOffsetY() };
     capturePanCache();
     updateCursor();
+  }
+
+  function beginPan(clientX: number, clientY: number) {
+    beginDrag(clientX, clientY, "pan");
+  }
+
+  /** Start dragging the poster sheet itself along the board. */
+  function beginSheetDrag(clientX: number, clientY: number) {
+    beginDrag(clientX, clientY, "sheet");
   }
 
   // Schedule the next pan repaint. With vsync on, requestAnimationFrame
@@ -368,9 +418,10 @@ export function useBoardViewport(
 
   // Coalesce moves into one repaint per scheduled frame. A synchronous
   // repaint per pointer event would starve the input stream, which makes
-  // fast drags choppy and lets them undershoot the cursor.
-  function movePan(clientX: number, clientY: number) {
-    if (!panDragRef.current) {
+  // fast drags choppy and lets them undershoot the cursor. The active
+  // drag updates the pan or the sheet position, then repaints once.
+  function moveDrag(clientX: number, clientY: number) {
+    if (!dragRef.current) {
       return;
     }
     pendingPanRef.current = { x: clientX, y: clientY };
@@ -382,12 +433,20 @@ export function useBoardViewport(
       panFrameKindRef.current = null;
       const pending = pendingPanRef.current;
       pendingPanRef.current = null;
-      const drag = panDragRef.current;
+      const drag = dragRef.current;
       if (!pending || !drag) {
         return;
       }
-      state.panX = drag.panStartX + (pending.x - drag.startX);
-      state.panY = drag.panStartY + (pending.y - drag.startY);
+      const deltaX = pending.x - drag.startX;
+      const deltaY = pending.y - drag.startY;
+      if (drag.kind === "pan") {
+        state.panX = drag.panStartX + deltaX;
+        state.panY = drag.panStartY + deltaY;
+      } else {
+        const scale = state.baseFit * state.zoom;
+        state.sheetX = drag.sheetStartX + deltaX / scale;
+        state.sheetY = drag.sheetStartY + deltaY / scale;
+      }
       if (panCacheValidRef.current && paintPanCache()) {
         return;
       }
@@ -439,8 +498,8 @@ export function useBoardViewport(
       return false;
     }
     const dpr = state.dpr;
-    const dx = (state.panX - panStartRef.current.x) * dpr;
-    const dy = (state.panY - panStartRef.current.y) * dpr;
+    const dx = (drawOffsetX() - frameStartRef.current.x) * dpr;
+    const dy = (drawOffsetY() - frameStartRef.current.y) * dpr;
     const width = canvas.width;
     const height = canvas.height;
     context.setTransform(1, 0, 0, 1, 0, 0);
@@ -480,8 +539,9 @@ export function useBoardViewport(
     context.restore();
   }
 
-  function endPan() {
-    panDragRef.current = null;
+  function endDrag() {
+    dragRef.current = null;
+    dragKindRef.current = null;
     pendingPanRef.current = null;
     cancelPanFrame();
     panningRef.current = false;
@@ -489,6 +549,17 @@ export function useBoardViewport(
     panCacheValidRef.current = false;
     updateCursor();
     // Repaint at full resolution with the drop shadow restored.
+    redrawRef.current();
+  }
+
+  /** Adopt a stored sheet position, for example from a loaded document. */
+  function setSheetOffset(x: number, y: number) {
+    if (state.sheetX === x && state.sheetY === y) {
+      return;
+    }
+    state.sheetX = x;
+    state.sheetY = y;
+    panCacheValidRef.current = false;
     redrawRef.current();
   }
 
@@ -502,8 +573,10 @@ export function useBoardViewport(
       toDocPoint,
       isPanOverride,
       beginPan,
-      movePan,
-      endPan,
+      beginSheetDrag,
+      moveDrag,
+      endDrag,
+      setSheetOffset,
       setFitCalc,
       setContent,
     };
@@ -520,8 +593,13 @@ interface BoardViewportApi {
   toDocPoint: (clientX: number, clientY: number) => { x: number; y: number };
   isPanOverride: (button: number) => boolean;
   beginPan: (clientX: number, clientY: number) => void;
-  movePan: (clientX: number, clientY: number) => void;
-  endPan: () => void;
+  /** Start dragging the poster sheet itself along the board. */
+  beginSheetDrag: (clientX: number, clientY: number) => void;
+  /** Feed a pointer move to whichever drag is active. */
+  moveDrag: (clientX: number, clientY: number) => void;
+  endDrag: () => void;
+  /** Adopt a stored sheet position, for example from a loaded document. */
+  setSheetOffset: (x: number, y: number) => void;
   setFitCalc: (calc: (contentW: number, contentH: number) => number) => void;
   setContent: (width: number, height: number) => void;
 }

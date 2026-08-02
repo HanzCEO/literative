@@ -17,8 +17,12 @@ import {
 interface EditorContextValue {
   document: PosterDocument | null;
   selectedId: string | null;
-  setDocument: (document: PosterDocument) => void;
+  /** True when the poster sheet itself is selected on the board. */
+  sheetSelected: boolean;
+  setDocument: React.Dispatch<React.SetStateAction<PosterDocument | null>>;
   selectLayer: (id: string | null) => void;
+  /** Select or deselect the poster sheet; selecting clears the layer. */
+  selectSheet: (selected: boolean) => void;
   addImageLayer: (
     src: string,
     naturalWidth?: number,
@@ -35,8 +39,21 @@ const EditorContext = createContext<EditorContextValue | null>(null);
 export function EditorProvider({ children }: { children: ReactNode }) {
   const [document, setDocument] = useState<PosterDocument | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sheetSelected, setSheetSelected] = useState(false);
 
-  const selectLayer = useCallback((id: string | null) => setSelectedId(id), []);
+  const selectLayer = useCallback((id: string | null) => {
+    setSelectedId(id);
+    if (id) {
+      setSheetSelected(false);
+    }
+  }, []);
+
+  const selectSheet = useCallback((selected: boolean) => {
+    setSheetSelected(selected);
+    if (selected) {
+      setSelectedId(null);
+    }
+  }, []);
 
   const addImageLayer = useCallback(
     async (src: string, naturalWidth?: number, naturalHeight?: number) => {
@@ -142,8 +159,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     () => ({
       document,
       selectedId,
+      sheetSelected,
       setDocument,
       selectLayer,
+      selectSheet,
       addImageLayer,
       addTextLayer,
       updateLayer,
@@ -153,8 +172,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     [
       document,
       selectedId,
+      sheetSelected,
       setDocument,
       selectLayer,
+      selectSheet,
       addImageLayer,
       addTextLayer,
       updateLayer,

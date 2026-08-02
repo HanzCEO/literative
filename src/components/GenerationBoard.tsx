@@ -38,6 +38,13 @@ export function GenerationBoard({
 }: GenerationBoardProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const { settings } = useSettings();
+  const sheetSelectedRef = useRef(false);
+  const posterRectRef = useRef<{ width: number; height: number } | null>(
+    null,
+  );
+  posterRectRef.current = result
+    ? { width: result.width, height: result.height }
+    : posterSize;
 
   const drawRef = useRef<() => void>(() => {});
   const board = useBoardViewport(boardRef, {
@@ -74,8 +81,14 @@ export function GenerationBoard({
         return;
       }
       const scale = vp.baseFit * vp.zoom;
-      const offsetX = vp.panX + (vp.contentW - result.width * scale) / 2;
-      const offsetY = vp.panY + (vp.contentH - result.height * scale) / 2;
+      const offsetX =
+        vp.panX +
+        (vp.contentW - result.width * scale) / 2 +
+        vp.sheetX * scale;
+      const offsetY =
+        vp.panY +
+        (vp.contentH - result.height * scale) / 2 +
+        vp.sheetY * scale;
       context.setTransform(
         vp.dpr * scale,
         0,
@@ -108,13 +121,26 @@ export function GenerationBoard({
         POSTER_RADIUS,
         1 / scale,
       );
+      drawSheetSelection(
+        context,
+        result.width,
+        result.height,
+        scale,
+        sheetSelectedRef.current,
+      );
       return;
     }
 
     if (posterSize) {
       const scale = vp.baseFit * vp.zoom;
-      const offsetX = vp.panX + (vp.contentW - posterSize.width * scale) / 2;
-      const offsetY = vp.panY + (vp.contentH - posterSize.height * scale) / 2;
+      const offsetX =
+        vp.panX +
+        (vp.contentW - posterSize.width * scale) / 2 +
+        vp.sheetX * scale;
+      const offsetY =
+        vp.panY +
+        (vp.contentH - posterSize.height * scale) / 2 +
+        vp.sheetY * scale;
       context.setTransform(
         vp.dpr * scale,
         0,
@@ -146,6 +172,13 @@ export function GenerationBoard({
         posterSize.height,
         POSTER_RADIUS,
         1 / scale,
+      );
+      drawSheetSelection(
+        context,
+        posterSize.width,
+        posterSize.height,
+        scale,
+        sheetSelectedRef.current,
       );
     }
   }, [board, result, posterSize]);
@@ -195,24 +228,48 @@ export function GenerationBoard({
     };
   }, [result, board]);
 
-  // The preview has no draggable content, so every pointer press pans.
+  // The preview has no layer editing: Space plus the left button pans
+  // the viewport, and dragging the poster sheet itself moves it on the
+  // board. Empty board presses only clear the selection.
   useEffect(() => {
     const canvas = boardRef.current;
     if (!canvas) {
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
-      if (event.button === 1) {
+      if (event.button !== 0) {
+        // Middle and right buttons never touch the content.
         event.preventDefault();
+        return;
       }
       canvas.setPointerCapture?.(event.pointerId);
-      board.beginPan(event.clientX, event.clientY);
+      if (board.isPanOverride(event.button)) {
+        // Space held: the drag pans the viewport, not the content.
+        board.beginPan(event.clientX, event.clientY);
+        return;
+      }
+      const point = board.toDocPoint(event.clientX, event.clientY);
+      const size = posterRectRef.current;
+      const onSheet =
+        size !== null &&
+        point.x >= 0 &&
+        point.x <= size.width &&
+        point.y >= 0 &&
+        point.y <= size.height;
+      if (onSheet) {
+        sheetSelectedRef.current = true;
+        drawRef.current();
+        board.beginSheetDrag(event.clientX, event.clientY);
+        return;
+      }
+      sheetSelectedRef.current = false;
+      drawRef.current();
     };
     const handlePointerMove = (event: PointerEvent) => {
-      board.movePan(event.clientX, event.clientY);
+      board.moveDrag(event.clientX, event.clientY);
     };
     const handlePointerUp = () => {
-      board.endPan();
+      board.endDrag();
     };
     const handleDoubleClick = () => {
       board.resetView();
@@ -289,6 +346,33 @@ function roundRectPath(
   context.lineTo(x, y + radius);
   context.quadraticCurveTo(x, y, x + radius, y);
   context.closePath();
+}
+
+// Dashed blue outline just outside the sheet when it is selected.
+function drawSheetSelection(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  scale: number,
+  selected: boolean,
+) {
+  if (!selected) {
+    return;
+  }
+  context.save();
+  context.strokeStyle = "#4f8cff";
+  context.lineWidth = 2 / scale;
+  context.setLineDash([6 / scale, 4 / scale]);
+  roundRectPath(
+    context,
+    -8,
+    -8,
+    width + 16,
+    height + 16,
+    POSTER_RADIUS + 8,
+  );
+  context.stroke();
+  context.restore();
 }
 
 function drawBorder(
