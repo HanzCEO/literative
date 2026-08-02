@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
-import { PencilSimple, X } from "@phosphor-icons/react";
 import { drawLayer } from "../lib/drawLayers";
 import { loadImage } from "../lib/file";
-import type { GeneratedPoster } from "../lib/generation";
 import type { PosterDocument } from "../state/posterDocument";
 import { useSettings } from "../state/SettingsContext";
 import { FIT_PADDING, useBoardViewport } from "./editor/useBoardViewport";
@@ -12,15 +10,11 @@ const POSTER_RADIUS = 12;
 interface GenerationBoardProps {
   /** The shared drawing board canvas (canvas-area). */
   boardRef: RefObject<HTMLCanvasElement | null>;
-  result: GeneratedPoster | null;
-  error: string | null;
   posterSize: { width: number; height: number } | null;
   /** The live poster document the agent edits, when an agent run is active. */
   document?: PosterDocument | null;
   /** Space reserved at the bottom so the island never hides the poster. */
   bottomInset: number;
-  onEdit: () => void;
-  onDismiss: () => void;
   /** Reports the current zoom level so the host can show it in the navbar. */
   onZoomChange?: (zoom: number) => void;
 }
@@ -32,25 +26,18 @@ interface GenerationBoardProps {
  */
 export function GenerationBoard({
   boardRef,
-  result,
-  error,
   posterSize,
   document,
   bottomInset,
-  onEdit,
-  onDismiss,
   onZoomChange,
 }: GenerationBoardProps) {
-  const imageRef = useRef<HTMLImageElement | null>(null);
   const layerImagesRef = useRef(new Map<string, HTMLImageElement>());
   const { settings } = useSettings();
   const sheetSelectedRef = useRef(false);
   const posterRectRef = useRef<{ width: number; height: number } | null>(
     null,
   );
-  posterRectRef.current = result
-    ? { width: result.width, height: result.height }
-    : posterSize;
+  posterRectRef.current = posterSize;
 
   const drawRef = useRef<() => void>(() => {});
   const board = useBoardViewport(boardRef, {
@@ -145,62 +132,6 @@ export function GenerationBoard({
       return;
     }
 
-    if (result) {
-      const image = imageRef.current;
-      if (!image) {
-        return;
-      }
-      const scale = vp.baseFit * vp.zoom;
-      const offsetX =
-        vp.panX +
-        (vp.contentW - result.width * scale) / 2 +
-        vp.sheetX * scale;
-      const offsetY =
-        vp.panY +
-        (vp.contentH - result.height * scale) / 2 +
-        vp.sheetY * scale;
-      context.setTransform(
-        vp.dpr * scale,
-        0,
-        0,
-        vp.dpr * scale,
-        vp.dpr * offsetX,
-        vp.dpr * offsetY,
-      );
-      context.save();
-      context.shadowColor = "rgba(0, 0, 0, 0.30)";
-      context.shadowBlur = vp.interacting ? 0 : 24 * scale;
-      context.shadowOffsetY = vp.interacting ? 0 : 8 * scale;
-      roundRectPath(
-        context,
-        0,
-        0,
-        result.width,
-        result.height,
-        POSTER_RADIUS,
-      );
-      context.clip();
-      context.drawImage(image, 0, 0, result.width, result.height);
-      context.restore();
-      drawBorder(
-        context,
-        0,
-        0,
-        result.width,
-        result.height,
-        POSTER_RADIUS,
-        1 / scale,
-      );
-      drawSheetSelection(
-        context,
-        result.width,
-        result.height,
-        scale,
-        sheetSelectedRef.current,
-      );
-      return;
-    }
-
     if (posterSize) {
       const scale = vp.baseFit * vp.zoom;
       const offsetX =
@@ -251,21 +182,12 @@ export function GenerationBoard({
         sheetSelectedRef.current,
       );
     }
-  }, [board, result, posterSize]);
+  }, [board, document, posterSize]);
   drawRef.current = draw;
 
   // Fit the preview into the board; the island reserves the bottom inset.
   useEffect(() => {
-    if (result) {
-      board.setContent(result.width, result.height);
-      board.setFitCalc(
-        (contentW, contentH) =>
-          Math.min(
-            (contentW - FIT_PADDING * 2) / result.width,
-            (contentH - FIT_PADDING * 2 - bottomInset) / result.height,
-          ),
-      );
-    } else if (document) {
+    if (document) {
       board.setContent(document.width, document.height);
       board.setFitCalc(
         (contentW, contentH) =>
@@ -286,26 +208,7 @@ export function GenerationBoard({
       );
     }
     drawRef.current();
-  }, [board, result, document, posterSize, bottomInset]);
-
-  // Load the generated image once and repaint when it is ready.
-  useEffect(() => {
-    imageRef.current = null;
-    if (!result) {
-      return;
-    }
-    let cancelled = false;
-    void loadImage(result.dataUrl).then((image) => {
-      if (cancelled) {
-        return;
-      }
-      imageRef.current = image;
-      drawRef.current();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [result, board]);
+  }, [board, document, posterSize, bottomInset]);
 
   // Load image layers of the agent document and repaint when ready.
   useEffect(() => {
@@ -393,38 +296,7 @@ export function GenerationBoard({
     };
   }, [board]);
 
-  return (
-    <>
-      {result ? (
-        <div className="result-overlay" data-testid="result-overlay">
-          <div className="result-actions">
-            <button
-              type="button"
-              className="result-button"
-              onClick={onEdit}
-              aria-label="Edit poster"
-            >
-              <PencilSimple size={16} weight="bold" />
-              Edit
-            </button>
-            <button
-              type="button"
-              className="result-dismiss"
-              onClick={onDismiss}
-              aria-label="Dismiss poster"
-            >
-              <X size={16} weight="bold" />
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {error && (
-        <p className="generation-error" role="alert">
-          {error}
-        </p>
-      )}
-    </>
-  );
+  return null;
 }
 
 function roundRectPath(

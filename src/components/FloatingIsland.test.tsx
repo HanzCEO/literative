@@ -33,11 +33,11 @@ beforeEach(() => {
   onDragDropEvent.mockResolvedValue(vi.fn());
 });
 
-function renderIsland(onGenerate: (prompt: string) => void = vi.fn()) {
+function renderIsland(onRun: (prompt: string) => void = vi.fn()) {
   return render(
     <MoodboardProvider>
       <FloatingIsland
-        onGenerate={onGenerate}
+        onRun={onRun}
         onOpenSettings={vi.fn()}
       />
     </MoodboardProvider>,
@@ -95,12 +95,12 @@ describe("FloatingIsland", () => {
 
   it("submits the prompt", async () => {
     const user = userEvent.setup();
-    const onGenerate = vi.fn();
-    renderIsland(onGenerate);
+    const onRun = vi.fn();
+    renderIsland(onRun);
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "Retro travel poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
-    expect(onGenerate).toHaveBeenCalledWith("Retro travel poster");
+    expect(onRun).toHaveBeenCalledWith("Retro travel poster");
   });
 
   it("adds dropped image paths to the moodboard", async () => {
@@ -158,7 +158,7 @@ describe("FloatingIsland", () => {
     expect(screen.queryByTestId("moodboard")).not.toBeInTheDocument();
   });
 
-  it("enables submit when a reference exists", async () => {
+  it("stays disabled with only a reference, no prompt", async () => {
     mockedInvoke.mockResolvedValue([
       { name: "one.png", mimeType: "image/png", dataBase64: "b25l" },
     ]);
@@ -167,6 +167,12 @@ describe("FloatingIsland", () => {
     await waitFor(() =>
       expect(screen.getByTestId("moodboard")).toBeInTheDocument(),
     );
+    // The agent needs a prompt; references alone do not enable submit.
+    expect(
+      screen.getByRole("button", { name: "Generate poster" }),
+    ).toBeDisabled();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await userEvent.setup().type(input, "poster");
     expect(
       screen.getByRole("button", { name: "Generate poster" }),
     ).toBeEnabled();

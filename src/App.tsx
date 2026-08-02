@@ -15,11 +15,9 @@ import { EditorProvider, useEditor } from "./state/EditorContext";
 import { ProjectsProvider, useProjects } from "./state/ProjectsContext";
 import {
   createDocument,
-  createDocumentFromImage,
-  createDocumentWithImage,
   type PosterDocument,
 } from "./state/posterDocument";
-import { errorMessage, generatePoster, type GeneratedPoster } from "./lib/generation";
+import { errorMessage } from "./lib/generation";
 import {
   listenAgentEvents,
   referencePayloads,
@@ -39,9 +37,6 @@ function Shell() {
   const { activeProject, createProject, selectProject } = useProjects();
   const { settings: globalSettings } = useSettings();
   const [view, setView] = useState<View>("projects");
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<GeneratedPoster | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [backHovered, setBackHovered] = useState(false);
@@ -142,9 +137,6 @@ function Shell() {
     if (!size) {
       return;
     }
-    setGenerating(false);
-    setError(null);
-    setResult(null);
     setAgentRunning(true);
     try {
       const payloads = await referencePayloads(references);
@@ -171,9 +163,8 @@ function Shell() {
   }
 
   function resetGeneration() {
-    setResult(null);
-    setError(null);
     clearReferences();
+    resetAgentState();
   }
 
   function handleCreateProject(input: {
@@ -192,60 +183,20 @@ function Shell() {
     });
     selectProject(project.id);
     resetGeneration();
-    resetAgentState();
     setView("editor");
   }
 
   function handleOpenProject(projectId: string) {
     selectProject(projectId);
     resetGeneration();
-    resetAgentState();
     setView("editor");
   }
 
-  async function handleGenerate(prompt: string) {
-    setGenerating(true);
-    setError(null);
-    try {
-      const params =
-        activeProject?.settings.params ?? defaultProjectSettings().params;
-      const poster = await generatePoster(prompt, references, params);
-      setResult(poster);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  function handleDismiss() {
-    setResult(null);
-    clearReferences();
-  }
-
   function handleEdit() {
-    if (agentDocument) {
-      setDocument(agentDocument);
-    } else if (result) {
-      const size = activeProject?.posterSize;
-      if (size) {
-        setDocument(
-          createDocumentWithImage(
-            size.width,
-            size.height,
-            result.width,
-            result.height,
-            result.dataUrl,
-          ),
-        );
-      } else {
-        setDocument(
-          createDocumentFromImage(result.width, result.height, result.dataUrl),
-        );
-      }
-    } else {
+    if (!agentDocument) {
       return;
     }
+    setDocument(agentDocument);
     setView("poster");
   }
 
@@ -256,11 +207,9 @@ function Shell() {
 
   const inEditor = view === "editor" || view === "poster";
   const boardBottomInset = references.length > 0 ? 184 : 112;
-  const previewSize = result
-    ? `${result.width} x ${result.height} px`
-    : activeProject?.posterSize
-      ? `${activeProject.posterSize.width} x ${activeProject.posterSize.height} px`
-      : null;
+  const previewSize = activeProject?.posterSize
+    ? `${activeProject.posterSize.width} x ${activeProject.posterSize.height} px`
+    : null;
 
   return (
     <div className="app">
@@ -321,10 +270,12 @@ function Shell() {
           data-testid="canvas-area"
           ref={boardRef}
           role={
-            view === "editor" && !result && activeProject ? "img" : undefined
+            view === "editor" && !agentDocument && activeProject
+              ? "img"
+              : undefined
           }
           aria-label={
-            view === "editor" && !result && activeProject
+            view === "editor" && !agentDocument && activeProject
               ? `Poster base canvas ${activeProject.posterSize.width} by ${activeProject.posterSize.height} pixels`
               : undefined
           }
@@ -351,13 +302,9 @@ function Shell() {
       {view === "editor" && (
         <GenerationBoard
           boardRef={boardRef}
-          result={result}
-          error={error}
           posterSize={activeProject?.posterSize ?? null}
           document={agentDocument}
           bottomInset={boardBottomInset}
-          onEdit={handleEdit}
-          onDismiss={handleDismiss}
           onZoomChange={setPreviewZoom}
         />
       )}
@@ -365,17 +312,15 @@ function Shell() {
         <AgentConsole
           running={agentRunning}
           activity={agentActivity}
-          onRun={(prompt) => void handleAgentRun(prompt)}
           onStop={handleAgentStop}
           onEdit={handleEdit}
           canEdit={agentDocument !== null}
-          disabled={!activeProject}
         />
       )}
       {view === "editor" && (
         <FloatingIsland
-          busy={generating}
-          onGenerate={handleGenerate}
+          busy={agentRunning}
+          onRun={(prompt) => void handleAgentRun(prompt)}
           onOpenSettings={() => setProjectSettingsOpen(true)}
         />
       )}

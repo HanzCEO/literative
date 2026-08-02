@@ -93,29 +93,45 @@ describe("generation flow", () => {
     onDragDropEvent.mockResolvedValue(vi.fn());
   });
 
-  it("displays the generated poster on the canvas", async () => {
+  it("runs the agent from the island prompt", async () => {
     const user = userEvent.setup();
-    mockedInvoke.mockResolvedValue({
-      dataUrl: "data:image/png;base64,Z2VuZXJhdGVk",
-      width: 1024,
-      height: 1024,
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return {
+          document: {
+            width: 1024,
+            height: 1536,
+            sheetX: 0,
+            sheetY: 0,
+            layers: [],
+          },
+          events: [],
+        };
+      }
+      return null;
     });
     await openEditor();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "A neon jazz poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
 
-    const poster = await screen.findByTestId("result-overlay");
-    expect(poster).toBeInTheDocument();
-    expect(screen.getByText("1024 x 1024 px")).toBeInTheDocument();
-    // The generated result replaces the empty poster frame.
-    expect(
-      screen.queryByRole("img", { name: /Poster base canvas/ }),
-    ).not.toBeInTheDocument();
-    expect(mockedInvoke).toHaveBeenCalledWith(
-      "generate_poster",
-      expect.objectContaining({ prompt: "A neon jazz poster" }),
+    const agentCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "agent_run",
     );
+    expect(agentCall).toBeDefined();
+    const request = (agentCall![1] as { request: { prompt: string } }).request;
+    expect(request.prompt).toBe("A neon jazz poster");
+    // The chat bubble is the single agent surface; the island input is
+    // the only prompt entry point.
+    expect(
+      screen.getByRole("complementary", { name: "Design agent chat" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Agent prompt" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the zoom level and poster size together in the navbar center", async () => {
@@ -440,11 +456,13 @@ describe("generation flow", () => {
           { name: "mood.png", mimeType: "image/png", dataBase64: "bW9vZA==" },
         ]);
       }
-      return Promise.resolve({
-        dataUrl: "data:image/png;base64,xxx",
-        width: 1,
-        height: 1,
-      });
+      if (command === "agent_run") {
+        return Promise.resolve({
+          document: { width: 1024, height: 1536, sheetX: 0, sheetY: 0, layers: [] },
+          events: [],
+        });
+      }
+      return Promise.resolve(null);
     });
     await openEditor();
     dropImage();
@@ -453,25 +471,35 @@ describe("generation flow", () => {
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
-    await screen.findByTestId("result-overlay");
-    const generateCall = mockedInvoke.mock.calls.find(
-      (call) => call[0] === "generate_poster",
+    await waitFor(() =>
+      expect(
+        mockedInvoke.mock.calls.some((call) => call[0] === "agent_run"),
+      ).toBe(true),
     );
-    const args = generateCall![1] as {
-      prompt: string;
-      references: { name: string; mimeType: string }[];
+    const agentCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "agent_run",
+    );
+    const args = agentCall![1] as {
+      request: { references: { name: string; mimeType: string }[] };
     };
-    expect(args.references).toHaveLength(1);
-    expect(args.references[0].name).toBe("mood.png");
-    expect(args.references[0].mimeType).toBe("image/png");
+    expect(args.request.references).toHaveLength(1);
+    expect(args.request.references[0].name).toBe("mood.png");
+    expect(args.request.references[0].mimeType).toBe("image/png");
   });
 
-  it("sends the project settings with the generation request", async () => {
+  it("sends the project settings with the agent request", async () => {
     const user = userEvent.setup();
-    mockedInvoke.mockResolvedValue({
-      dataUrl: "data:image/png;base64,xxx",
-      width: 1,
-      height: 1,
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return {
+          document: { width: 1024, height: 1536, sheetX: 0, sheetY: 0, layers: [] },
+          events: [],
+        };
+      }
+      return null;
     });
     await openEditor();
     await user.click(
@@ -488,64 +516,63 @@ describe("generation flow", () => {
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
-    await screen.findByTestId("result-overlay");
-    const generateCall = mockedInvoke.mock.calls.find(
-      (call) => call[0] === "generate_poster",
-    );
-    const args = generateCall![1] as { params: { steps: number } };
-    expect(args.params.steps).toBe(15);
-  });
-
-  it("shows the error message when generation fails", async () => {
-    const user = userEvent.setup();
-    mockedInvoke.mockRejectedValue(new Error("connection refused"));
-    await openEditor();
-    const input = screen.getByRole("textbox", { name: "Poster prompt" });
-    await user.type(input, "poster");
-    await user.click(screen.getByRole("button", { name: "Generate poster" }));
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent("connection refused"),
+      expect(
+        mockedInvoke.mock.calls.some((call) => call[0] === "agent_run"),
+      ).toBe(true),
     );
-    expect(screen.queryByTestId("result-overlay")).not.toBeInTheDocument();
+    const agentCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "agent_run",
+    );
+    const args = agentCall![1] as { request: { params: { steps: number } } };
+    expect(args.request.params.steps).toBe(15);
   });
 
-  it("dismisses the poster with its close button", async () => {
+  it("shows the agent error in the chat bubble", async () => {
     const user = userEvent.setup();
-    mockedInvoke.mockResolvedValue({
-      dataUrl: "data:image/png;base64,xxx",
-      width: 512,
-      height: 512,
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        throw "connection refused";
+      }
+      return null;
     });
     await openEditor();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
-    await screen.findByTestId("result-overlay");
-    await user.click(screen.getByRole("button", { name: "Dismiss poster" }));
-    await waitFor(() =>
-      expect(screen.queryByTestId("result-overlay")).not.toBeInTheDocument(),
-    );
-    // The empty poster frame returns to the center stage.
     expect(
-      screen.getByRole("img", { name: "Poster base canvas 1024 by 1536 pixels" }),
+      await screen.findByText("connection refused"),
     ).toBeInTheDocument();
   });
 
-  it("disables the input while generating", async () => {
+  it("disables the input while the agent runs", async () => {
     const user = userEvent.setup();
     let resolveInvoke: (value: unknown) => void = () => {};
-    mockedInvoke.mockImplementation(
-      () =>
-        new Promise((resolve) => {
+    mockedInvoke.mockImplementation((command) => {
+      if (command === "get_app_settings") {
+        return Promise.resolve(null);
+      }
+      if (command === "agent_run") {
+        return new Promise((resolve) => {
           resolveInvoke = resolve;
-        }),
-    );
+        });
+      }
+      return Promise.resolve(null);
+    });
     await openEditor();
     const input = screen.getByRole("textbox", { name: "Poster prompt" });
     await user.type(input, "poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
     expect(input).toBeDisabled();
-    resolveInvoke({ dataUrl: "data:image/png;base64,x", width: 1, height: 1 });
-    await screen.findByTestId("result-overlay");
+    await act(async () => {
+      resolveInvoke({
+        document: { width: 1024, height: 1536, sheetX: 0, sheetY: 0, layers: [] },
+        events: [],
+      });
+    });
+    expect(input).toBeEnabled();
   });
 });

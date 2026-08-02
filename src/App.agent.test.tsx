@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -27,7 +27,17 @@ async function openEditor() {
   await user.click(screen.getAllByRole("button", { name: "New project" })[0]);
   await user.type(screen.getByLabelText("Project name"), "Test project");
   await user.click(screen.getByRole("button", { name: "Create project" }));
-  await screen.findByRole("textbox", { name: "Agent prompt" });
+  await screen.findByRole("textbox", { name: "Poster prompt" });
+}
+
+/** Submit a prompt through the single island input. */
+async function submitPrompt(prompt: string) {
+  const user = userEvent.setup();
+  await user.type(
+    screen.getByRole("textbox", { name: "Poster prompt" }),
+    prompt,
+  );
+  await user.click(screen.getByRole("button", { name: "Generate poster" }));
 }
 
 /** Emit an agent event through the captured listener. */
@@ -43,7 +53,7 @@ function emitAgentEvent(event: AgentEvent) {
   });
 }
 
-describe("agent console", () => {
+describe("agent chat", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
     onDragDropEvent.mockReset();
@@ -52,8 +62,7 @@ describe("agent console", () => {
     mockedListen.mockResolvedValue(vi.fn());
   });
 
-  it("runs the agent with the poster document and settings", async () => {
-    const user = userEvent.setup();
+  it("runs the agent from the island prompt with the poster document", async () => {
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {
         return null;
@@ -65,11 +74,7 @@ describe("agent console", () => {
     });
     await openEditor();
 
-    await user.type(
-      screen.getByRole("textbox", { name: "Agent prompt" }),
-      "A jazz poster",
-    );
-    await user.click(screen.getByRole("button", { name: "Run agent" }));
+    await submitPrompt("A jazz poster");
 
     const call = mockedInvoke.mock.calls.find(([name]) => name === "agent_run");
     expect(call).toBeDefined();
@@ -88,9 +93,36 @@ describe("agent console", () => {
     expect(request.references).toEqual([]);
   });
 
+  it("has no separate agent input, only the island prompt", async () => {
+    await openEditor();
+    expect(
+      screen.getByRole("textbox", { name: "Poster prompt" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Agent prompt" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Design agent chat" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not zoom while wheeling over the chat bubble", async () => {
+    await openEditor();
+    const bubble = screen
+      .getByRole("complementary", { name: "Design agent chat" })
+      .querySelector(".agent-activity");
+    expect(bubble).not.toBeNull();
+    fireEvent.wheel(bubble!, { deltaY: -100 });
+    expect(screen.getByLabelText("Preview zoom level")).toHaveTextContent(
+      "Zoom 100%",
+    );
+  });
+
   it("streams tool activity and applies the document", async () => {
-    const user = userEvent.setup();
     mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
       if (command === "agent_run") {
         return { document: null, events: [] };
       }
@@ -98,11 +130,7 @@ describe("agent console", () => {
     });
     await openEditor();
 
-    await user.type(
-      screen.getByRole("textbox", { name: "Agent prompt" }),
-      "Add a red circle",
-    );
-    await user.click(screen.getByRole("button", { name: "Run agent" }));
+    await submitPrompt("Add a red circle");
 
     emitAgentEvent({ kind: "turn", number: 1 });
     emitAgentEvent({
@@ -155,6 +183,7 @@ describe("agent console", () => {
     expect(screen.getByText("Finished the poster.")).toBeInTheDocument();
 
     // The document event enables the open-in-editor action.
+    const user = userEvent.setup();
     await user.click(
       screen.getByRole("button", { name: "Open agent result in editor" }),
     );
@@ -165,7 +194,6 @@ describe("agent console", () => {
   });
 
   it("stops the running agent on demand", async () => {
-    const user = userEvent.setup();
     let resolveRun: (value: unknown) => void = () => undefined;
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {
@@ -183,18 +211,15 @@ describe("agent console", () => {
     });
     await openEditor();
 
-    await user.type(
-      screen.getByRole("textbox", { name: "Agent prompt" }),
-      "make it",
-    );
-    await user.click(screen.getByRole("button", { name: "Run agent" }));
-
+    await submitPrompt("make it");
+    await screen.findByRole("button", { name: "Stop agent" });
+    const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Stop agent" }));
     expect(
       mockedInvoke.mock.calls.some(([name]) => name === "agent_stop"),
     ).toBe(true);
 
-    // The run resolves; the console returns to idle.
+    // The run resolves; the bubble returns to idle.
     await act(async () => {
       resolveRun({ document: null, events: [] });
     });
@@ -204,7 +229,6 @@ describe("agent console", () => {
   });
 
   it("shows the agent error and stops the run", async () => {
-    const user = userEvent.setup();
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {
         return null;
@@ -216,11 +240,7 @@ describe("agent console", () => {
     });
     await openEditor();
 
-    await user.type(
-      screen.getByRole("textbox", { name: "Agent prompt" }),
-      "make it",
-    );
-    await user.click(screen.getByRole("button", { name: "Run agent" }));
+    await submitPrompt("make it");
 
     expect(
       await screen.findByText("completion model is not configured"),
@@ -231,7 +251,6 @@ describe("agent console", () => {
   });
 
   it("records a failed tool result from the guardrail", async () => {
-    const user = userEvent.setup();
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {
         return null;
@@ -243,11 +262,7 @@ describe("agent console", () => {
     });
     await openEditor();
 
-    await user.type(
-      screen.getByRole("textbox", { name: "Agent prompt" }),
-      "poster",
-    );
-    await user.click(screen.getByRole("button", { name: "Run agent" }));
+    await submitPrompt("poster");
 
     emitAgentEvent({
       kind: "toolResult",

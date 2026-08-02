@@ -35,17 +35,17 @@ function isImagePath(path: string): boolean {
 }
 
 interface FloatingIslandProps {
-  /** Disables the input while a generation runs. */
+  /** Disables the input while the agent runs. */
   busy?: boolean;
   /** Called with the trimmed prompt when the user submits. */
-  onGenerate: (prompt: string) => void;
+  onRun: (prompt: string) => void;
   /** Opens the settings for the active project. */
   onOpenSettings: () => void;
 }
 
 export function FloatingIsland({
   busy = false,
-  onGenerate,
+  onRun,
   onOpenSettings,
 }: FloatingIslandProps) {
   const { references, addFiles, removeReference } = useMoodboard();
@@ -141,17 +141,17 @@ export function FloatingIsland({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const text = prompt.trim();
-    if (!text && references.length === 0) {
+    if (!text) {
       return;
     }
-    onGenerate(text);
+    onRun(text);
+    setPrompt("");
   }
 
-  const canSubmit =
-    !busy && (prompt.trim().length > 0 || references.length > 0);
+  const canSubmit = !busy && prompt.trim().length > 0;
   const placeholder =
     references.length === 0
-      ? "Drop reference images, then describe your poster..."
+      ? "Describe the poster you want..."
       : "Describe your poster...";
 
   return (

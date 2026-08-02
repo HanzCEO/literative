@@ -10,7 +10,7 @@ const CHROME_SELECTOR = [
   ".editor-toolbar",
   ".app-header",
   ".island",
-  ".result-overlay",
+  ".agent-console",
   ".dialog-overlay",
   "[role=\"dialog\"]",
 ].join(", ");

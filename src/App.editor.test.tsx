@@ -68,17 +68,51 @@ async function openEditor() {
 }
 
 async function enterEditor() {
-  mockedInvoke.mockResolvedValue({
-    dataUrl: "data:image/png;base64,cG9zdGVy",
-    width: 800,
-    height: 600,
+  mockedInvoke.mockImplementation(async (command: string) => {
+    if (command === "get_app_settings") {
+      return null;
+    }
+    if (command === "agent_run") {
+      return {
+        document: {
+          width: 1024,
+          height: 1536,
+          sheetX: 0,
+          sheetY: 0,
+          layers: [
+            {
+              id: "ag-1",
+              kind: "image",
+              name: "Generated poster",
+              visible: true,
+              opacity: 1,
+              blendMode: "source-over",
+              x: 112,
+              y: 468,
+              rotation: 0,
+              src: "data:image/png;base64,cG9zdGVy",
+              width: 800,
+              height: 600,
+            },
+          ],
+        },
+        events: [],
+      };
+    }
+    return null;
   });
   await openEditor();
   const input = screen.getByRole("textbox", { name: "Poster prompt" });
   await userEvent.type(input, "a poster");
-  await userEvent.click(screen.getByRole("button", { name: "Generate poster" }));
-  await screen.findByTestId("result-overlay");
-  await userEvent.click(screen.getByRole("button", { name: "Edit poster" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Generate poster" }),
+  );
+  await screen.findByRole("button", {
+    name: "Open agent result in editor",
+  });
+  await userEvent.click(
+    screen.getByRole("button", { name: "Open agent result in editor" }),
+  );
   await screen.findByRole("button", { name: "Add text" });
 }
 
@@ -170,13 +204,13 @@ describe("poster editor", () => {
     await enterEditor();
     await user.click(screen.getByRole("button", { name: "Add text" }));
     await user.click(screen.getByRole("button", { name: "Add text" }));
-    const rows = screen.getAllByTestId(/^layer-row-layer-/);
+    const rows = screen.getAllByTestId(/^layer-row-/);
     expect(rows).toHaveLength(3); // base image + two text layers
     const firstRowId = rows[0].dataset.testid;
     await user.click(
       screen.getAllByRole("button", { name: "Move Text layer down" })[0],
     );
-    const rowsAfter = screen.getAllByTestId(/^layer-row-layer-/);
+    const rowsAfter = screen.getAllByTestId(/^layer-row-/);
     expect(rowsAfter[0].dataset.testid).not.toBe(firstRowId);
     const deleteButtons = screen.getAllByRole("button", {
       name: /Delete Text layer/,
