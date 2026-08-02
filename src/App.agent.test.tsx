@@ -260,6 +260,59 @@ describe("agent chat", () => {
     ).toBeNull();
   });
 
+  it("fades the list edges only where the chat is cut off", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+
+    const list = document.querySelector(".agent-activity") as HTMLElement;
+    Object.defineProperty(list, "scrollHeight", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(list, "clientHeight", {
+      value: 200,
+      configurable: true,
+    });
+
+    // Pinned at the bottom: only the top edge is cut off.
+    list.scrollTop = 600;
+    fireEvent.scroll(list);
+    expect(
+      document.querySelector(".agent-console-fade-top"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector(".agent-console-fade-bottom"),
+    ).toBeNull();
+
+    // Scrolled into the middle: both edges are cut off.
+    list.scrollTop = 300;
+    fireEvent.scroll(list);
+    expect(
+      document.querySelector(".agent-console-fade-top"),
+    ).not.toBeNull();
+    expect(
+      document.querySelector(".agent-console-fade-bottom"),
+    ).not.toBeNull();
+
+    // At the top: only the bottom edge is cut off.
+    list.scrollTop = 0;
+    fireEvent.scroll(list);
+    expect(document.querySelector(".agent-console-fade-top")).toBeNull();
+    expect(
+      document.querySelector(".agent-console-fade-bottom"),
+    ).not.toBeNull();
+  });
+
   it("scrolls the chat to the bottom when a new line streams in", async () => {
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {

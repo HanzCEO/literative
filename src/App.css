@@ -1399,6 +1399,14 @@ select option {
   }
 }
 
+.agent-activity-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .agent-activity {
   list-style: none;
   margin: 0;
@@ -1410,6 +1418,33 @@ select option {
   flex-direction: column;
   gap: 8px;
   pointer-events: auto;
+}
+
+/* Frosted edge fades: they blur whatever the bubbles float over, so
+   the chat reads as continuous above and below the viewport. They sit
+   above the list but let pointer events fall through. */
+.agent-console-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 44px;
+  pointer-events: none;
+  z-index: 2;
+  backdrop-filter: blur(6px);
+}
+
+.agent-console-fade-top {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    var(--bg-elevated),
+    transparent
+  );
+}
+
+.agent-console-fade-bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg-elevated), transparent);
 }
 
 .agent-bubble {

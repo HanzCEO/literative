@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PencilSimple, Trash } from "@phosphor-icons/react";
 import type { AgentChatMessage } from "../lib/agentChat";
 
@@ -37,11 +37,29 @@ export function AgentConsole({
   // True while the user is scrolled near the bottom; only then does a
   // new bubble pull the list down to the newest line.
   const stickToBottomRef = useRef(true);
+  // Edge fades: true when the list cuts off bubbles on that side, so
+  // the chat reads as continuous above and below the viewport.
+  const [fadeTop, setFadeTop] = useState(false);
+  const [fadeBottom, setFadeBottom] = useState(false);
+
+  function updateFades() {
+    const list = listRef.current;
+    if (!list) return;
+    const distanceFromBottom =
+      list.scrollHeight - list.scrollTop - list.clientHeight;
+    setFadeTop(list.scrollTop > 4);
+    // The bottom fade appears only once the user has scrolled up;
+    // pinned at the bottom there is nothing hidden below.
+    setFadeBottom(distanceFromBottom > 4);
+  }
 
   useEffect(() => {
     const list = listRef.current;
-    if (!list || !stickToBottomRef.current) return;
-    list.scrollTop = list.scrollHeight;
+    if (!list) return;
+    if (stickToBottomRef.current) {
+      list.scrollTop = list.scrollHeight;
+    }
+    updateFades();
   }, [chat]);
 
   function handleScroll() {
@@ -50,6 +68,7 @@ export function AgentConsole({
     const distanceFromBottom =
       list.scrollHeight - list.scrollTop - list.clientHeight;
     stickToBottomRef.current = distanceFromBottom < 48;
+    updateFades();
   }
 
   const showEdit = canEdit && !running;
@@ -79,42 +98,48 @@ export function AgentConsole({
           </button>
         </div>
       )}
-      <ul
-        ref={listRef}
-        className="agent-activity"
-        aria-label="Agent activity"
-        onScroll={handleScroll}
-      >
-        {chat.map((message) =>
-          message.kind === "user" ? (
-            <li key={message.id} className="agent-bubble agent-bubble-user">
-              {message.prompt}
-            </li>
-          ) : (
-            <li key={message.id} className="agent-bubble agent-bubble-turn">
-              <span className="agent-bubble-header">
-                Turn {message.number}
-              </span>
-              {(message.items ?? []).length === 0 ? (
-                <span className="agent-line agent-line-thinking">
-                  Thinking...
+      <div className="agent-activity-wrap">
+        <ul
+          ref={listRef}
+          className="agent-activity"
+          aria-label="Agent activity"
+          onScroll={handleScroll}
+        >
+          {chat.map((message) =>
+            message.kind === "user" ? (
+              <li key={message.id} className="agent-bubble agent-bubble-user">
+                {message.prompt}
+              </li>
+            ) : (
+              <li key={message.id} className="agent-bubble agent-bubble-turn">
+                <span className="agent-bubble-header">
+                  Turn {message.number}
                 </span>
-              ) : (
-                (message.items ?? []).map((item) => (
-                  <span
-                    key={item.id}
-                    className={`agent-line agent-line-${item.kind}${
-                      item.ok === false ? " agent-line-fail" : ""
-                    }`}
-                  >
-                    {item.text}
+                {(message.items ?? []).length === 0 ? (
+                  <span className="agent-line agent-line-thinking">
+                    Thinking...
                   </span>
-                ))
-              )}
-            </li>
-          ),
+                ) : (
+                  (message.items ?? []).map((item) => (
+                    <span
+                      key={item.id}
+                      className={`agent-line agent-line-${item.kind}${
+                        item.ok === false ? " agent-line-fail" : ""
+                      }`}
+                    >
+                      {item.text}
+                    </span>
+                  ))
+                )}
+              </li>
+            ),
+          )}
+        </ul>
+        {fadeTop && <div className="agent-console-fade agent-console-fade-top" />}
+        {fadeBottom && (
+          <div className="agent-console-fade agent-console-fade-bottom" />
         )}
-      </ul>
+      </div>
     </aside>
   );
 }
