@@ -207,11 +207,20 @@ body {
 
 .canvas-area {
   flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   /* Reserve space for the fixed app header. */
   padding-top: var(--header-height);
+}
+
+/* The drawing board: the same region rendered as a canvas element. */
+.board-canvas {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  touch-action: none;
 }
 
 .canvas-hint {
@@ -413,58 +422,12 @@ body {
   }
 }
 
-.canvas-stack {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 24px 112px;
-  width: 100%;
-  height: 100%;
-  max-width: 100%;
-}
-
-/* The island grows taller when the moodboard shows references. */
-.canvas-stack-references {
-  padding-bottom: 184px;
-}
-
-.canvas-stage {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: auto;
-}
-
-.poster-frame-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  padding-bottom: 30px;
-}
-
-.poster-frame {
-  max-width: 100%;
-  max-height: 100%;
-  background: #ffffff;
-  border: 2px dashed var(--border);
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-}
-
 .poster-frame-dimensions {
-  position: absolute;
-  bottom: 0;
+  position: fixed;
+  top: calc(var(--header-height) + 14px);
   left: 50%;
   transform: translateX(-50%);
+  z-index: 25;
   font-size: 12px;
   letter-spacing: 0.4px;
   color: var(--text-muted);
@@ -472,6 +435,11 @@ body {
 }
 
 .generation-error {
+  position: fixed;
+  top: calc(var(--header-height) + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
   color: #dc2626;
   font-size: 13px;
   text-align: center;
@@ -480,23 +448,20 @@ body {
   overflow-wrap: anywhere;
 }
 
-.result-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(560px, 90vw);
-  max-height: 100%;
-  padding: 10px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-}
-
-.result-header {
+.result-overlay {
+  position: fixed;
+  top: calc(var(--header-height) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 4px;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .result-meta {
@@ -520,15 +485,6 @@ body {
 .result-dismiss:hover {
   background: var(--bg-hover);
   color: var(--text);
-}
-
-.result-image {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  object-fit: contain;
-  border-radius: 10px;
-  display: block;
 }
 
 .result-actions {
