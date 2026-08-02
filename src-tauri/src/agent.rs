@@ -1164,6 +1164,91 @@ mod tests {
         assert_eq!(outcome.document.layers.len(), 1);
     }
 
+
+    #[test]
+    fn document_round_trips_with_kind_tags_and_camel_case() {
+        let mut document = request("x").document;
+        document.layers.push(Layer::Image(ImageLayer {
+            id: "ag-1".into(),
+            name: "Generated image".into(),
+            visible: true,
+            opacity: 1.0,
+            blend_mode: "source-over".into(),
+            x: 0.0,
+            y: 256.0,
+            rotation: 0.0,
+            src: "data:image/png;base64,cg==".into(),
+            width: 1024.0,
+            height: 1024.0,
+        }));
+        document.layers.push(Layer::Text(TextLayer {
+            id: "ag-2".into(),
+            name: "Text".into(),
+            visible: true,
+            opacity: 0.8,
+            blend_mode: "multiply".into(),
+            x: 512.0,
+            y: 80.0,
+            rotation: 15.0,
+            text: "SUMMER".into(),
+            font_size: 120.0,
+            color: "#1a1a1f".into(),
+        }));
+        document.layers.push(Layer::Shape(ShapeLayer {
+            id: "ag-3".into(),
+            name: "Rectangle".into(),
+            visible: true,
+            opacity: 1.0,
+            blend_mode: "source-over".into(),
+            x: 100.0,
+            y: 100.0,
+            rotation: 0.0,
+            shape_type: "rect".into(),
+            fill: "#f2c14e".into(),
+            stroke: "#1a1a1f".into(),
+            stroke_width: 2.0,
+            corner_radius: 12.0,
+            width: 300.0,
+            height: 200.0,
+        }));
+        document.sheet_x = 40.0;
+        document.sheet_y = -20.0;
+
+        let json = serde_json::to_value(&document).unwrap();
+        assert_eq!(json["width"].as_f64(), Some(1024.0));
+        assert_eq!(json["sheetX"], 40.0);
+        assert_eq!(json["layers"][0]["kind"], "image");
+        assert_eq!(json["layers"][0]["blendMode"], "source-over");
+        assert_eq!(json["layers"][1]["kind"], "text");
+        assert_eq!(json["layers"][1]["fontSize"], 120.0);
+        assert_eq!(json["layers"][2]["kind"], "shape");
+        assert_eq!(json["layers"][2]["shapeType"], "rect");
+        assert_eq!(json["layers"][2]["cornerRadius"], 12.0);
+
+        // The frontend sends the same shape back; deserialize a
+        // frontend-style payload and confirm the fields map.
+        let fixture = r##"{
+            "width": 1024, "height": 1536, "sheetX": 0, "sheetY": 0,
+            "layers": [{
+                "id": "ag-1", "kind": "shape", "name": "Line",
+                "visible": true, "opacity": 1, "blendMode": "source-over",
+                "x": 10, "y": 20, "rotation": 0,
+                "shapeType": "line", "fill": "#00000000", "stroke": "#1a1a1f",
+                "strokeWidth": 4, "cornerRadius": 0, "width": 120, "height": 60
+            }]
+        }"##;
+        let parsed: PosterDocument = serde_json::from_str(fixture).unwrap();
+        assert_eq!(parsed.layers.len(), 1);
+        match &parsed.layers[0] {
+            Layer::Shape(layer) => {
+                assert_eq!(layer.shape_type, "line");
+                assert_eq!(layer.stroke_width, 4.0);
+                assert_eq!(layer.x, 10.0);
+            }
+            other => panic!("expected a shape layer, got {other:?}"),
+        }
+    }
+
     #[test]
     fn describe_document_lists_layers_top_to_bottom() {
         let mut document = request("x").document;
