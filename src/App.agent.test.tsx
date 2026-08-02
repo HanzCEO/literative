@@ -220,6 +220,46 @@ describe("agent chat", () => {
     ).toBeInTheDocument();
   });
 
+  it("clears the session chat without touching the prompt history", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+    emitAgentEvent({
+      kind: "toolResult",
+      name: "place_object",
+      ok: true,
+      detail: "placed ellipse as ag-1",
+    });
+    expect(screen.getByText("A jazz poster")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: "Clear session chat" }),
+    );
+
+    // The bubbles and the console itself are gone.
+    expect(screen.queryByText("A jazz poster")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Design agent chat" }),
+    ).not.toBeInTheDocument();
+    // The persisted chat under the project key is removed too.
+    const projects = JSON.parse(
+      localStorage.getItem("literative.projects") ?? "[]",
+    ) as { id: string }[];
+    expect(
+      localStorage.getItem(`literative.project.${projects[0].id}.chat`),
+    ).toBeNull();
+  });
+
   it("scrolls the chat to the bottom when a new line streams in", async () => {
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {

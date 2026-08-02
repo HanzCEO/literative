@@ -198,6 +198,8 @@ The image model CANNOT generate text of any kind: no titles, headlines, captions
 It produces graphics, illustration, and logos only. \
 Never ask generate_image for text. If the design needs text, place it with place_object and let the app render it. \
 Text on a poster is rendered by the app with a bundled font, so it is always crisp. \
+When you place text, write plain characters. Never escape punctuation into HTML entities: \
+use the literal ampersand, never &amp;, unless the user explicitly asks for the entity. \
 Work step by step: place the background and elements first, then refine. \
 When the poster matches the request, stop calling tools and reply with a short summary of what you made.",
         poster_width, poster_height
@@ -654,6 +656,9 @@ mod tests {
         assert!(prompt.contains("CANNOT generate text"));
         assert!(prompt.contains("place_object"));
         assert!(prompt.contains("generate_image"));
+        // The agent must not escape plain ampersands as HTML entities.
+        assert!(prompt.contains("&amp;"));
+        assert!(prompt.contains("literal ampersand"));
     }
 
     #[test]

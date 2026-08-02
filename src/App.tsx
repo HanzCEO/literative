@@ -301,6 +301,18 @@ function Shell() {
     void stopAgent().catch(() => undefined);
   }
 
+  /** Clear the session chat; the poster document stays on the board. */
+  function handleClearChat() {
+    setAgentChat([]);
+    setAgentStarted(false);
+    messageIdRef.current = 0;
+    itemIdRef.current = 0;
+    lastTurnNumberRef.current = 0;
+    if (activeProject) {
+      updateProjectChat(activeProject.id, []);
+    }
+  }
+
   function resetGeneration() {
     clearReferences();
     resetAgentState();
@@ -466,6 +478,7 @@ function Shell() {
           running={agentRunning}
           chat={agentChat}
           onEdit={handleEdit}
+          onClearChat={handleClearChat}
           canEdit={agentDocument !== null}
         />
       )}

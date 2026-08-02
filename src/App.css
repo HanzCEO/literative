@@ -1479,9 +1479,30 @@ select option {
 .agent-line-thinking {
   font-style: italic;
   color: var(--text-muted);
+  background: linear-gradient(
+    90deg,
+    var(--text-muted) 25%,
+    var(--text) 50%,
+    var(--text-muted) 75%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: agent-thinking-shimmer 1.6s linear infinite;
 }
 
-.agent-edit {
+@keyframes agent-thinking-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.agent-edit,
+.agent-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1494,7 +1515,8 @@ select option {
   cursor: pointer;
 }
 
-.agent-edit:hover {
+.agent-edit:hover,
+.agent-clear:hover {
   background: var(--accent-soft);
   color: var(--accent);
 }
