@@ -1,8 +1,10 @@
 import {
   useEffect,
+  useRef,
   useState,
   type ClipboardEvent,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
 import {
   ArrowUp,
@@ -34,6 +36,42 @@ function isImagePath(path: string): boolean {
   return dot !== -1 && IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
 }
 
+/** Storage key for the submitted prompt history. */
+const PROMPT_HISTORY_KEY = "literative.promptHistory";
+/** Cap on how many prompts the history keeps. */
+const MAX_PROMPT_HISTORY = 50;
+
+/** Load the persisted prompt history, oldest first. */
+function loadPromptHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(PROMPT_HISTORY_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((item): item is string => typeof item === "string")
+      .slice(-MAX_PROMPT_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+/** Append a submitted prompt, skipping consecutive duplicates. */
+function pushPromptHistory(
+  history: string[],
+  text: string,
+): string[] {
+  const next =
+    history[history.length - 1] === text
+      ? history
+      : [...history, text];
+  return next.slice(-MAX_PROMPT_HISTORY);
+}
+
 interface FloatingIslandProps {
   /** Disables the input while the agent runs. */
   busy?: boolean;
@@ -51,6 +89,52 @@ export function FloatingIsland({
   const { references, addFiles, removeReference } = useMoodboard();
   const [prompt, setPrompt] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [history, setHistory] = useState<string[]>(loadPromptHistory);
+  // Null means the live draft; an index walks the history, oldest first.
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
+  // The draft saved when the user first steps back into the history.
+  const draftRef = useRef("");
+
+  function stepHistory(direction: "back" | "forward") {
+    if (direction === "back") {
+      if (history.length === 0) {
+        return;
+      }
+      if (historyIndex === null) {
+        draftRef.current = prompt;
+        setHistoryIndex(history.length - 1);
+        setPrompt(history[history.length - 1]);
+        return;
+      }
+      if (historyIndex > 0) {
+        const next = historyIndex - 1;
+        setHistoryIndex(next);
+        setPrompt(history[next]);
+      }
+      return;
+    }
+    if (historyIndex === null) {
+      return;
+    }
+    const next = historyIndex + 1;
+    if (next >= history.length) {
+      setHistoryIndex(null);
+      setPrompt(draftRef.current);
+    } else {
+      setHistoryIndex(next);
+      setPrompt(history[next]);
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowUp" && history.length > 0) {
+      event.preventDefault();
+      stepHistory("back");
+    } else if (event.key === "ArrowDown" && historyIndex !== null) {
+      event.preventDefault();
+      stepHistory("forward");
+    }
+  }
 
   // Prevent the webview from navigating when files are dragged over the window.
   useEffect(() => {
@@ -145,6 +229,17 @@ export function FloatingIsland({
       return;
     }
     onRun(text);
+    setHistory((current) => {
+      const next = pushPromptHistory(current, text);
+      try {
+        localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(next));
+      } catch {
+        // Storage can be unavailable; the session history still works.
+      }
+      return next;
+    });
+    setHistoryIndex(null);
+    draftRef.current = "";
     setPrompt("");
   }
 
@@ -211,6 +306,7 @@ export function FloatingIsland({
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           aria-label="Poster prompt"
           disabled={busy}

@@ -28,6 +28,7 @@ const mockedOpen = vi.mocked(open);
 
 beforeEach(() => {
   mockedInvoke.mockReset();
+  localStorage.clear();
   mockedOpen.mockReset();
   onDragDropEvent.mockReset();
   onDragDropEvent.mockResolvedValue(vi.fn());
@@ -101,6 +102,80 @@ describe("FloatingIsland", () => {
     await user.type(input, "Retro travel poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
     expect(onRun).toHaveBeenCalledWith("Retro travel poster");
+  });
+
+  it("recalls the previous prompt with the arrow up key", async () => {
+    const user = userEvent.setup();
+    renderIsland();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await user.type(input, "A jazz poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    expect(input).toHaveValue("");
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(input).toHaveValue("A jazz poster");
+  });
+
+  it("cycles back through the prompt history", async () => {
+    const user = userEvent.setup();
+    renderIsland();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await user.type(input, "first poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    await user.type(input, "second poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(input).toHaveValue("second poster");
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(input).toHaveValue("first poster");
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    // The oldest entry is the floor of the walk.
+    expect(input).toHaveValue("first poster");
+  });
+
+  it("returns to the live draft with the arrow down key", async () => {
+    const user = userEvent.setup();
+    renderIsland();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await user.type(input, "a poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    await user.type(input, "draft text");
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(input).toHaveValue("a poster");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(input).toHaveValue("draft text");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    // Already on the live draft; the walk stays put.
+    expect(input).toHaveValue("draft text");
+  });
+
+  it("keeps the prompt history after a remount", async () => {
+    const user = userEvent.setup();
+    const first = renderIsland();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await user.type(input, "persisted poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    first.unmount();
+
+    renderIsland();
+    const newInput = screen.getByRole("textbox", { name: "Poster prompt" });
+    fireEvent.keyDown(newInput, { key: "ArrowUp" });
+    expect(newInput).toHaveValue("persisted poster");
+  });
+
+  it("skips a repeated consecutive prompt in the history", async () => {
+    const user = userEvent.setup();
+    renderIsland();
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await user.type(input, "repeat poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    await user.type(input, "repeat poster");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect(input).toHaveValue("repeat poster");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    // The duplicate did not create a second history entry.
+    expect(input).toHaveValue("repeat poster");
   });
 
   it("adds dropped image paths to the moodboard", async () => {
