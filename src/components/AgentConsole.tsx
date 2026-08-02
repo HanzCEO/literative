@@ -71,12 +71,6 @@ export function AgentConsole({
         )}
       </div>
       <ul className="agent-activity" aria-label="Agent activity">
-        {activity.length === 0 && (
-          <li className="agent-activity-empty">
-            Ask the agent to build a poster with the prompt bar below. It
-            plans with a completion model and edits the poster with tools.
-          </li>
-        )}
         {activity.map((item) => (
           <li
             key={item.id}

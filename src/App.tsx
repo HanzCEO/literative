@@ -46,6 +46,7 @@ function Shell() {
     null,
   );
   const [agentRunning, setAgentRunning] = useState(false);
+  const [agentStarted, setAgentStarted] = useState(false);
   const [agentActivity, setAgentActivity] = useState<AgentActivityItem[]>([]);
   const activityIdRef = useRef(0);
 
@@ -130,6 +131,7 @@ function Shell() {
     setAgentDocument(null);
     setAgentActivity([]);
     setAgentRunning(false);
+    setAgentStarted(false);
   }
 
   async function handleAgentRun(prompt: string) {
@@ -138,6 +140,7 @@ function Shell() {
       return;
     }
     setAgentRunning(true);
+    setAgentStarted(true);
     try {
       const payloads = await referencePayloads(references);
       const params =
@@ -308,7 +311,7 @@ function Shell() {
           onZoomChange={setPreviewZoom}
         />
       )}
-      {view === "editor" && (
+      {view === "editor" && agentStarted && (
         <AgentConsole
           running={agentRunning}
           activity={agentActivity}

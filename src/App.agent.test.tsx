@@ -93,8 +93,19 @@ describe("agent chat", () => {
     expect(request.references).toEqual([]);
   });
 
-  it("has no separate agent input, only the island prompt", async () => {
+  it("hides the chat bubble until the user prompts", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
     await openEditor();
+    // The island prompt is the only entry point, and no chat bubble
+    // floats before the first prompt.
     expect(
       screen.getByRole("textbox", { name: "Poster prompt" }),
     ).toBeInTheDocument();
@@ -102,12 +113,30 @@ describe("agent chat", () => {
       screen.queryByRole("textbox", { name: "Agent prompt" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("complementary", { name: "Design agent chat" }),
+      screen.queryByRole("complementary", { name: "Design agent chat" }),
+    ).not.toBeInTheDocument();
+
+    // Prompting through the island raises the chat bubble.
+    await submitPrompt("A jazz poster");
+    expect(
+      await screen.findByRole("complementary", {
+        name: "Design agent chat",
+      }),
     ).toBeInTheDocument();
   });
 
   it("does not zoom while wheeling over the chat bubble", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
     await openEditor();
+    await submitPrompt("poster");
     const bubble = screen
       .getByRole("complementary", { name: "Design agent chat" })
       .querySelector(".agent-activity");
