@@ -14,6 +14,12 @@ export function ProjectListPage({
   const { projects, activeProject, removeProject } = useProjects();
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
+  // Order by the last change, newest first; ISO timestamps sort
+  // chronologically. Legacy projects fall back to their created time.
+  const ordered = [...projects].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
+
   // Close the open menu when the user presses the Escape key.
   useEffect(() => {
     if (!menuOpen) {
@@ -56,7 +62,7 @@ export function ProjectListPage({
         </div>
       ) : (
         <ul className="project-list">
-          {projects.map((project) => (
+          {ordered.map((project) => (
             <li key={project.id}>
               <div
                 className={`project-card${
@@ -77,7 +83,7 @@ export function ProjectListPage({
                     </span>
                   )}
                   <span className="project-card-meta">
-                    {new Date(project.createdAt).toLocaleDateString()}
+                    {new Date(project.updatedAt).toLocaleDateString()}
                   </span>
                 </button>
                 <div className="project-menu">

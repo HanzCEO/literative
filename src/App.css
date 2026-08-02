@@ -186,6 +186,25 @@ body {
   color: var(--accent-hover);
 }
 
+/* The hover fill swaps between two icon weights. The swap is pure
+   CSS, so the icon can never stay filled after the pointer leaves or
+   the view changes. */
+.header-back-icon {
+  display: inline-flex;
+}
+
+.header-back-icon-fill {
+  display: none;
+}
+
+.header-back:hover .header-back-icon-fill {
+  display: inline-flex;
+}
+
+.header-back:hover .header-back-icon-regular {
+  display: none;
+}
+
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -1055,8 +1074,12 @@ select option {
   background: var(--bg-hover);
 }
 
+/* The active project: a left rail, clearly distinct from a hover
+   border. The list already orders by last change, so the rail only
+   marks which project is open. */
 .project-card-active {
-  border-color: var(--accent);
+  border-left: 3px solid var(--accent);
+  padding-left: 14px;
 }
 
 .project-card-open {

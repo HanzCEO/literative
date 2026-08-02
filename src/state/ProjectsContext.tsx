@@ -21,6 +21,8 @@ export interface Project {
   name: string;
   description: string;
   createdAt: string;
+  /** When the project content last changed; orders the project list. */
+  updatedAt: string;
   posterSize: PosterSize;
   settings: ProjectSettings;
   /** How many agent turns this project has completed. */
@@ -55,6 +57,7 @@ function normalizeProject(project: Project): Project {
     posterSize: project.posterSize ?? { ...DEFAULT_POSTER_SIZE },
     settings: project.settings ?? defaultProjectSettings(),
     turnCount: project.turnCount ?? 0,
+    updatedAt: project.updatedAt ?? project.createdAt,
   };
 }
 
@@ -108,13 +111,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       posterSize?: PosterSize;
       settings?: ProjectSettings;
     }): Project => {
+      const now = new Date().toISOString();
       const project: Project = {
         id: `project-${Date.now().toString(36)}-${Math.random()
           .toString(36)
           .slice(2, 7)}`,
         name: input.name.trim(),
         description: (input.description ?? "").trim(),
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
         posterSize: input.posterSize ?? { ...DEFAULT_POSTER_SIZE },
         settings: input.settings ?? defaultProjectSettings(),
         turnCount: 0,
@@ -144,6 +149,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
             ? {
                 ...project,
                 settings: { ...project.settings, ...patch },
+                updatedAt: new Date().toISOString(),
               }
             : project,
         ),
@@ -155,7 +161,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const setTurnCount = useCallback((id: string, count: number) => {
     setProjects((previous) =>
       previous.map((project) =>
-        project.id === id ? { ...project, turnCount: count } : project,
+        project.id === id
+          ? { ...project, turnCount: count, updatedAt: new Date().toISOString() }
+          : project,
       ),
     );
   }, []);

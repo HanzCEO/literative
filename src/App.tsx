@@ -45,7 +45,6 @@ function Shell() {
   const [view, setView] = useState<View>("projects");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
-  const [backHovered, setBackHovered] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const boardRef = useRef<HTMLCanvasElement | null>(null);
   const [agentDocument, setAgentDocument] = useState<PosterDocument | null>(
@@ -307,13 +306,19 @@ function Shell() {
               aria-label="Back to projects"
               title="Projects"
               onClick={() => setView("projects")}
-              onMouseEnter={() => setBackHovered(true)}
-              onMouseLeave={() => setBackHovered(false)}
             >
-              <Cactus
-                size={18}
-                weight={backHovered ? "fill" : "regular"}
-              />
+              <span className="header-back-icon" aria-hidden="true">
+                <Cactus
+                  size={18}
+                  weight="fill"
+                  className="header-back-icon-fill"
+                />
+                <Cactus
+                  size={18}
+                  weight="regular"
+                  className="header-back-icon-regular"
+                />
+              </span>
             </button>
           )}
         </div>
