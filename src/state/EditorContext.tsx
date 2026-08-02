@@ -83,6 +83,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
           blendMode: "source-over",
           x: Math.round((current.width - fitted.width) / 2),
           y: Math.round((current.height - fitted.height) / 2),
+          rotation: 0,
           src,
           width: fitted.width,
           height: fitted.height,

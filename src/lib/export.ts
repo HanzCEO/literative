@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { loadImage } from "./file";
+import { drawLayer } from "./drawLayers";
 import type { PosterDocument, TextLayer } from "../state/posterDocument";
 
 /** Rasterize the background and image layers into PNG bytes. */
@@ -16,14 +17,21 @@ export async function renderCompositePng(
   }
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
+  const images = new Map<string, HTMLImageElement>();
   for (const layer of poster.layers) {
-    if (!layer.visible || layer.kind !== "image") {
+    if (layer.kind === "image") {
+      images.set(layer.src, await loadImage(layer.src));
+    }
+  }
+  for (const layer of poster.layers) {
+    if (!layer.visible || layer.kind === "text") {
+      // Text layers are drawn by the Rust exporter on top of the
+      // composite, with the bundled font.
       continue;
     }
-    context.globalAlpha = layer.opacity;
-    context.globalCompositeOperation = layer.blendMode;
-    const image = await loadImage(layer.src);
-    context.drawImage(image, layer.x, layer.y, layer.width, layer.height);
+    // The export raster is at full poster resolution, so the shared
+    // draw routine (rotation included) applies without a scale factor.
+    drawLayer(context, layer, (src) => images.get(src));
   }
   context.globalAlpha = 1;
   context.globalCompositeOperation = "source-over";

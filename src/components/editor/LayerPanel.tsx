@@ -3,6 +3,7 @@ import {
   ArrowUp,
   Eye,
   EyeSlash,
+  Shapes,
   TextT,
   Trash,
 } from "@phosphor-icons/react";
@@ -45,6 +46,8 @@ export function LayerPanel() {
               <span className="layer-kind">
                 {layer.kind === "image" ? (
                   <img src={layer.src} alt="" className="layer-kind-thumb" />
+                ) : layer.kind === "shape" ? (
+                  <Shapes size={14} weight="bold" />
                 ) : (
                   <TextT size={14} weight="bold" />
                 )}

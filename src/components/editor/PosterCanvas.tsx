@@ -9,10 +9,10 @@ import {
 import { loadImage } from "../../lib/file";
 import { useSettings } from "../../state/SettingsContext";
 import {
-  estimateTextWidth,
   hitTestLayer,
   type PosterDocument,
 } from "../../state/posterDocument";
+import { drawLayer, roundRectPath } from "../../lib/drawLayers";
 import { FIT_PADDING, useBoardViewport } from "./useBoardViewport";
 
 const POSTER_RADIUS = 12;
@@ -142,57 +142,19 @@ export function PosterCanvas({
     context.fill();
     context.restore();
 
-    // Layers in document order.
+    // Layers in document order, each drawn with its own rotation.
     const images = loadedImages.current;
     for (const layer of doc.layers) {
       if (!layer.visible) {
         continue;
       }
-      context.globalAlpha = layer.opacity;
-      if (layer.kind === "image") {
-        context.globalCompositeOperation = layer.blendMode;
-        const image = images.get(layer.src);
-        if (image) {
-          context.drawImage(
-            image,
-            layer.x,
-            layer.y,
-            layer.width,
-            layer.height,
-          );
-        }
-        drawSelection(
-          context,
-          layer.x,
-          layer.y,
-          layer.width,
-          layer.height,
-          layer.id === selected,
-        );
-      } else {
-        context.globalCompositeOperation = "source-over";
-        context.fillStyle = layer.color;
-        context.font = `${layer.fontSize}px "DejaVu Sans", sans-serif`;
-        const lineHeight = layer.fontSize * 1.2;
-        layer.text.split("\n").forEach((line, lineIndex) => {
-          context.fillText(
-            line,
-            layer.x,
-            layer.y + lineHeight * (lineIndex + 0.8),
-          );
-        });
-        drawSelection(
-          context,
-          layer.x,
-          layer.y,
-          estimateTextWidth(layer),
-          layer.fontSize * 1.2,
-          layer.id === selected,
-        );
-      }
+      drawLayer(
+        context,
+        layer,
+        (src) => images.get(src),
+        layer.id === selected,
+      );
     }
-    context.globalAlpha = 1;
-    context.globalCompositeOperation = "source-over";
     // The poster sheet selection outline, just outside the frame.
     if (sheetSelectedRef.current) {
       context.save();
@@ -390,49 +352,4 @@ function boardBackground(): string {
     .getPropertyValue("--bg")
     .trim();
   return value || "#eef0f4";
-}
-
-function drawSelection(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  selected: boolean,
-) {
-  if (!selected) {
-    return;
-  }
-  context.save();
-  context.strokeStyle = "#4f8cff";
-  context.lineWidth = 2;
-  context.setLineDash([6, 4]);
-  context.strokeRect(x, y, width, height);
-  context.restore();
-}
-
-function roundRectPath(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  context.beginPath();
-  context.moveTo(x + radius, y);
-  context.lineTo(x + width - radius, y);
-  context.quadraticCurveTo(x + width, y, x + width, y + radius);
-  context.lineTo(x + width, y + height - radius);
-  context.quadraticCurveTo(
-    x + width,
-    y + height,
-    x + width - radius,
-    y + height,
-  );
-  context.lineTo(x + radius, y + height);
-  context.quadraticCurveTo(x, y + height, x, y + height - radius);
-  context.lineTo(x, y + radius);
-  context.quadraticCurveTo(x, y, x + radius, y);
-  context.closePath();
 }
