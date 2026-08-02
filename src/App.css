@@ -538,10 +538,26 @@ body {
   flex-wrap: wrap;
 }
 
+.editor-toolbar-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
 .editor-size {
   font-size: 12px;
   color: var(--text-muted);
-  margin-right: 6px;
+}
+
+.editor-zoom-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
 }
 
 .toolbar-button {
@@ -605,9 +621,8 @@ body {
 
 .editor-zoom {
   font-size: 12px;
-  color: var(--text-muted);
-  min-width: 60px;
-  text-align: right;
+  font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
 }
 

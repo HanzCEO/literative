@@ -207,6 +207,14 @@ describe("poster editor", () => {
     });
   });
 
+  it("shows the zoom level and document size together in the toolbar center", async () => {
+    await enterEditor();
+    const center = screen.getByLabelText("Zoom level").parentElement;
+    expect(center).not.toBeNull();
+    expect(center).toHaveTextContent("Zoom 100%");
+    expect(center).toHaveTextContent("1024 x 1536 px");
+  });
+
   it("zooms in with the Ctrl plus key", async () => {
     await enterEditor();
     fireEvent.keyDown(window, { key: "=", ctrlKey: true });

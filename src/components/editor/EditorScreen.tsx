@@ -148,16 +148,6 @@ export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
       )}
       <header className="editor-toolbar">
         <div className="editor-toolbar-left">
-          <span className="editor-size">
-            {document.width} x {document.height} px
-          </span>
-          <span
-            className="editor-zoom"
-            aria-label="Zoom level"
-            title="Scroll to zoom"
-          >
-            Zoom {Math.round(zoom * 100)}%
-          </span>
           <button
             type="button"
             className="toolbar-button"
@@ -198,6 +188,19 @@ export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
             onChange={handleImageFile}
             aria-label="Add image layer"
           />
+        </div>
+        <div className="editor-toolbar-center">
+          <span
+            className="editor-zoom"
+            aria-label="Zoom level"
+            title="Scroll to zoom"
+          >
+            Zoom {Math.round(zoom * 100)}%
+          </span>
+          <span className="editor-zoom-divider" aria-hidden="true" />
+          <span className="editor-size">
+            {document.width} x {document.height} px
+          </span>
         </div>
         <div className="editor-toolbar-right">
           <button
