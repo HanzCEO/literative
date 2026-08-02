@@ -183,6 +183,17 @@ pub fn tool_definitions() -> Vec<serde_json::Value> {
                 "required": ["prompt"]
             }),
         ),
+        tool_fn(
+            "project_tree",
+            "Inspect the poster object tree. Returns the hierarchy of objects on the poster, most recently added first. Call this to check what exists before moving, deleting, or editing an object; it never changes the poster.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "root_id": {"type": "string", "description": "The object id to show as the tree root; the default \"root\" is the whole poster."},
+                    "depth": {"type": "integer", "minimum": 0, "maximum": 4, "description": "How many levels of children to show; the default 1 shows every object, since objects are flat for now."}
+                }
+            }),
+        ),
     ]
 }
 
@@ -327,6 +338,26 @@ pub struct GenerateImageArgs {
     pub prompt: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTreeArgs {
+    /// The object id to list as the tree root; "root" is the poster.
+    #[serde(default = "default_root_id")]
+    pub root_id: String,
+    /// How many levels of children to show; the poster is flat for
+    /// now, so depth 1 shows every object.
+    #[serde(default = "default_depth")]
+    pub depth: u32,
+}
+
+fn default_root_id() -> String {
+    "root".into()
+}
+
+fn default_depth() -> u32 {
+    1
+}
+
 /// The typed arguments of one tool call.
 #[derive(Debug, Clone)]
 pub enum ToolCallArgs {
@@ -336,6 +367,7 @@ pub enum ToolCallArgs {
     RotateObject(RotateObjectArgs),
     EditObjectProperty(EditObjectPropertyArgs),
     GenerateImage(GenerateImageArgs),
+    ProjectTree(ProjectTreeArgs),
 }
 
 /// Parse the JSON arguments of a tool call into typed arguments.
@@ -361,6 +393,9 @@ pub fn parse_tool_call(name: &str, arguments: &str) -> Result<ToolCallArgs> {
             .map_err(bad),
         "generate_image" => serde_json::from_str(arguments)
             .map(ToolCallArgs::GenerateImage)
+            .map_err(bad),
+        "project_tree" => serde_json::from_str(arguments)
+            .map(ToolCallArgs::ProjectTree)
             .map_err(bad),
         _ => Err(ImageCoreError::Message(format!("unknown tool: {name}"))),
     }
@@ -441,6 +476,11 @@ pub fn validate_tool_call(
             }
             if let Some(refusal) = text_request_refusal(&args.prompt) {
                 return Err(invalid(refusal));
+            }
+        }
+        ToolCallArgs::ProjectTree(args) => {
+            if args.depth > 4 {
+                return Err(invalid("project_tree: depth must be at most 4"));
             }
         }
     }
@@ -624,9 +664,9 @@ mod tests {
     }
 
     #[test]
-    fn tool_definitions_expose_all_six_tools() {
+    fn tool_definitions_expose_all_seven_tools() {
         let tools = tool_definitions();
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 7);
         let names: Vec<&str> = tools
             .iter()
             .filter_map(|tool| tool["function"]["name"].as_str())
@@ -638,6 +678,7 @@ mod tests {
             "rotate_object",
             "edit_object_property",
             "generate_image",
+            "project_tree",
         ] {
             assert!(names.contains(&expected), "missing tool {expected}");
         }
@@ -716,7 +757,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_tool_call_accepts_all_six_tools() {
+    fn parse_tool_call_accepts_all_seven_tools() {
         let cases = [
             (
                 "place_object",
@@ -745,6 +786,14 @@ mod tests {
             (
                 "generate_image",
                 r#"{"prompt":"a city skyline at dusk"}"#,
+            ),
+            (
+                "project_tree",
+                r#"{}"#,
+            ),
+            (
+                "project_tree",
+                r#"{"rootId":"ag-2","depth":2}"#,
             ),
         ];
         for (name, arguments) in cases {
@@ -937,7 +986,7 @@ mod tests {
         assert_eq!(json["model"], "agent-model");
         assert_eq!(json["messages"][0]["role"], "system");
         assert_eq!(json["messages"][1]["content"], "make a poster");
-        assert_eq!(json["tools"].as_array().unwrap().len(), 6);
+        assert_eq!(json["tools"].as_array().unwrap().len(), 7);
         assert_eq!(json["tool_choice"], "auto");
         assert_eq!(json["temperature"], 0.7);
         assert!(!json["messages"][0].as_object().unwrap().contains_key("tool_calls"));

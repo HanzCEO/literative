@@ -173,6 +173,46 @@ pub fn describe_document(document: &PosterDocument) -> String {
     lines.join("\n")
 }
 
+/// Render the poster object tree as text for the project_tree tool.
+///
+/// The poster is flat today, so a subtree of one object has no
+/// children. Depth 0 shows the root line only.
+pub fn describe_project_tree(
+    document: &PosterDocument,
+    root_id: &str,
+    depth: u32,
+) -> Result<String> {
+    let depth = depth.min(4);
+    if root_id == "root" || root_id.trim().is_empty() {
+        let mut lines = vec![format!(
+            "root: Poster {:.0}x{:.0} ({} objects)",
+            document.width,
+            document.height,
+            document.layers.len()
+        )];
+        if depth >= 1 {
+            let top_to_bottom: Vec<&Layer> =
+                document.layers.iter().rev().collect();
+            for (index, layer) in top_to_bottom.iter().enumerate() {
+                let last = index + 1 == top_to_bottom.len();
+                let branch = if last { "`-- " } else { "|-- " };
+                lines.push(format!("{branch}{}", describe_layer(layer)));
+            }
+        }
+        return Ok(lines.join("\n"));
+    }
+    let layer = document
+        .layers
+        .iter()
+        .find(|layer| layer_id(layer) == root_id)
+        .ok_or_else(|| {
+            ImageCoreError::Message(format!(
+                "project_tree: no object with id {root_id}"
+            ))
+        })?;
+    Ok(describe_layer(layer))
+}
+
 fn describe_layer(layer: &Layer) -> String {
     let base = |id: &str,
                 kind: &str,
@@ -831,6 +871,11 @@ where
                 result.width, result.height
             ))
         }
+        ToolCallArgs::ProjectTree(args) => {
+            // Read-only: the poster never changes, so there is no
+            // document event to emit.
+            Ok(describe_project_tree(document, &args.root_id, args.depth)?)
+        }
     }
 }
 
@@ -1319,5 +1364,95 @@ mod tests {
         assert!(text.contains("SUMMER"), "{text}");
         assert!(text.contains("rotation 15 deg"), "{text}");
         assert!(text.contains("opacity 0.50"), "{text}");
+    }
+
+    #[test]
+    fn project_tree_lists_objects_under_the_root() {
+        let mut document = request("x").document;
+        document.layers.push(Layer::Text(TextLayer {
+            id: "ag-1".into(),
+            name: "Text".into(),
+            visible: true,
+            opacity: 1.0,
+            blend_mode: "source-over".into(),
+            x: 512.0,
+            y: 80.0,
+            rotation: 0.0,
+            text: "SUMMER".into(),
+            font_size: 120.0,
+            color: "#1a1a1f".into(),
+        }));
+        document.layers.push(Layer::Shape(ShapeLayer {
+            id: "ag-2".into(),
+            name: "Rectangle".into(),
+            visible: true,
+            opacity: 1.0,
+            blend_mode: "source-over".into(),
+            x: 100.0,
+            y: 100.0,
+            rotation: 0.0,
+            shape_type: "rect".into(),
+            fill: "#f2c14e".into(),
+            stroke: "#1a1a1f".into(),
+            stroke_width: 2.0,
+            corner_radius: 12.0,
+            width: 300.0,
+            height: 200.0,
+        }));
+        let tree = describe_project_tree(&document, "root", 1).unwrap();
+        assert!(tree.contains("root: Poster 1024x1536 (2 objects)"), "{tree}");
+        // The topmost layer comes first under the root.
+        let rect_pos = tree.find("ag-2").unwrap();
+        let text_pos = tree.find("ag-1").unwrap();
+        assert!(rect_pos < text_pos, "{tree}");
+        assert!(tree.contains("|-- ag-2"), "{tree}");
+        assert!(tree.contains("`-- ag-1"), "{tree}");
+        assert!(tree.contains("SUMMER"), "{tree}");
+    }
+
+    #[test]
+    fn project_tree_depth_zero_shows_the_root_line_only() {
+        let mut document = request("x").document;
+        document.layers.push(Layer::Text(TextLayer {
+            id: "ag-1".into(),
+            name: "Text".into(),
+            visible: true,
+            opacity: 1.0,
+            blend_mode: "source-over".into(),
+            x: 0.0,
+            y: 0.0,
+            rotation: 0.0,
+            text: "HI".into(),
+            font_size: 40.0,
+            color: "#000000".into(),
+        }));
+        let tree = describe_project_tree(&document, "root", 0).unwrap();
+        assert!(tree.contains("(1 objects)"), "{tree}");
+        assert!(!tree.contains("ag-1"), "{tree}");
+    }
+
+    #[test]
+    fn project_tree_finds_a_subtree_and_rejects_unknown_ids() {
+        let mut document = request("x").document;
+        document.layers.push(Layer::Shape(ShapeLayer {
+            id: "ag-1".into(),
+            name: "Rectangle".into(),
+            visible: true,
+            opacity: 1.0,
+            blend_mode: "source-over".into(),
+            x: 10.0,
+            y: 10.0,
+            rotation: 0.0,
+            shape_type: "rect".into(),
+            fill: "#ffffff".into(),
+            stroke: "#000000".into(),
+            stroke_width: 1.0,
+            corner_radius: 0.0,
+            width: 50.0,
+            height: 50.0,
+        }));
+        let subtree = describe_project_tree(&document, "ag-1", 2).unwrap();
+        assert!(subtree.contains("ag-1: rect"), "{subtree}");
+        assert!(describe_project_tree(&document, "missing", 1).is_err());
     }
 }
