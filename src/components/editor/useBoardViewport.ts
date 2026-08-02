@@ -396,11 +396,10 @@ export function useBoardViewport(
     panFrameRef.current = schedulePanFrame(applyPan);
   }
 
-  // Snapshot the current frame at reduced resolution. Pan repaints then
-  // blit this snapshot instead of re-rendering the whole scene, which is
-  // what keeps the pan inside the display frame budget. The snapshot is
-  // captured at up to full resolution on standard screens and scaled
-  // down only on high-density screens.
+  // Snapshot the current frame at full device resolution. Pan repaints
+  // then blit this snapshot instead of re-rendering the whole scene,
+  // which is what keeps the pan inside the display frame budget. A 1:1
+  // copy stays sharp on high-density screens and is the fastest blit.
   function capturePanCache() {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -408,25 +407,24 @@ export function useBoardViewport(
     }
     const cache = panCacheRef.current ?? document.createElement("canvas");
     panCacheRef.current = cache;
-    const dpr = state.dpr;
-    const cacheScale = Math.min(1, 1.5 / dpr);
-    const cacheWidth = Math.max(1, Math.round(canvas.width * cacheScale));
-    const cacheHeight = Math.max(1, Math.round(canvas.height * cacheScale));
-    if (cache.width !== cacheWidth || cache.height !== cacheHeight) {
-      cache.width = cacheWidth;
-      cache.height = cacheHeight;
+    if (cache.width !== canvas.width || cache.height !== canvas.height) {
+      cache.width = canvas.width;
+      cache.height = canvas.height;
     }
     const context = cache.getContext("2d");
     if (!context) {
       return;
     }
-    context.setTransform(cacheScale, 0, 0, cacheScale, 0, 0);
+    context.setTransform(1, 0, 0, 1, 0, 0);
     context.drawImage(canvas, 0, 0);
     panCacheValidRef.current = true;
   }
 
   // Blit the cached snapshot at the current pan offset and repaint the
   // exposed strips. Returns false when there is no usable cache.
+  // Blit the cached snapshot at the current pan offset. The offset is
+  // scaled by the device pixel ratio so the drag position matches the
+  // full-resolution repaint that runs on release, on any screen scale.
   function paintPanCache(): boolean {
     const canvas = canvasRef.current;
     const cache = panCacheRef.current;
@@ -437,13 +435,14 @@ export function useBoardViewport(
     if (!context) {
       return false;
     }
+    const dpr = state.dpr;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.fillStyle = boardBackground();
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(
       cache,
-      state.panX - panStartRef.current.x,
-      state.panY - panStartRef.current.y,
+      (state.panX - panStartRef.current.x) * dpr,
+      (state.panY - panStartRef.current.y) * dpr,
       canvas.width,
       canvas.height,
     );

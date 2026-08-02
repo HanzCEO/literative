@@ -18,8 +18,10 @@ const mockedInvoke = vi.mocked(invoke);
 /** Replace the canvas 2D context with a stub that records drawImage calls. */
 function recordCanvasContext() {
   const blits: number[][] = [];
+  const transforms: number[][] = [];
   const target: Record<string, unknown> = {
     drawImage: (...args: unknown[]) => blits.push(args as number[]),
+    setTransform: (...args: number[]) => transforms.push(args),
   };
   const stub = new Proxy(target, {
     get(_, prop) {
@@ -28,6 +30,9 @@ function recordCanvasContext() {
       }
       if (prop === "drawImage") {
         return target.drawImage;
+      }
+      if (prop === "setTransform") {
+        return target.setTransform;
       }
       if (typeof prop === "string" && !(prop in target)) {
         target[prop] = () => {};
@@ -42,7 +47,7 @@ function recordCanvasContext() {
   const spy = vi
     .spyOn(HTMLCanvasElement.prototype, "getContext")
     .mockReturnValue(stub);
-  return { blits, spy };
+  return { blits, transforms, spy };
 }
 
 /** Offset of the latest pan blit: drawImage(cache, dx, dy, w, h). */
@@ -182,6 +187,74 @@ describe("generation flow", () => {
     } finally {
       vi.useRealTimers();
       spy.mockRestore();
+    }
+  });
+
+  it("keeps the drag and release positions aligned on high-DPI screens", async () => {
+    const { blits, spy } = recordCanvasContext();
+    Object.defineProperty(window, "devicePixelRatio", {
+      value: 2,
+      configurable: true,
+    });
+    // jsdom has no layout: give canvases a size so the viewport measure
+    // runs and records the 2x device pixel ratio.
+    const widthSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientWidth", "get")
+      .mockReturnValue(300);
+    const heightSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientHeight", "get")
+      .mockReturnValue(150);
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(canvas, {
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 130,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      // A 30px drag at dpr 2 must travel 60 device pixels, so the
+      // release repaint lands exactly where the drag showed content.
+      expect(lastBlitOffset(blits)).toBeCloseTo(60, 5);
+      fireEvent.pointerUp(canvas, {
+        clientX: 130,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      // A second drag from the released position must not accumulate
+      // any offset: the pan stays 1:1 across gestures.
+      fireEvent.pointerDown(canvas, {
+        clientX: 130,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 160,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      expect(lastBlitOffset(blits)).toBeCloseTo(60, 5);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+      Object.defineProperty(window, "devicePixelRatio", {
+        value: 1,
+        configurable: true,
+      });
     }
   });
 
