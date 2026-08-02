@@ -276,6 +276,97 @@ describe("poster editor", () => {
     expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
   });
 
+  it("zooms with plain plus, minus, and zero keys", async () => {
+    await enterEditor();
+    // Plain keys carry no modifier, so no GTK or WebKit accelerator can
+    // intercept them even where the webview eats the Ctrl combos.
+    fireEvent.keyDown(window, { key: "+", code: "Equal" });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 125%");
+    fireEvent.keyDown(window, { key: "-", code: "Minus" });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+    fireEvent.keyDown(window, { key: "+", code: "Equal" });
+    fireEvent.keyDown(window, { key: "0", code: "Digit0" });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
+  it("does not zoom while typing in layer fields", async () => {
+    const user = userEvent.setup();
+    await enterEditor();
+    await user.click(screen.getByRole("button", { name: "Add text" }));
+    const textInput = await screen.findByLabelText("Layer text");
+    await user.type(textInput, "+0");
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
+  it("pans the viewport with space drag", async () => {
+    await enterEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    // Select the generated poster layer through the layer panel.
+    const rows = screen.getAllByTestId(/layer-row-/);
+    await userEvent.click(rows[0]);
+    expect(rows[0]).toHaveClass("layer-row-selected");
+    fireEvent.keyDown(window, { code: "Space" });
+    fireEvent.pointerDown(canvas, {
+      clientX: 400,
+      clientY: 300,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(canvas, {
+      clientX: 520,
+      clientY: 360,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+    fireEvent.keyUp(window, { code: "Space" });
+    // The viewport panned: the layer stayed selected and unmoved.
+    expect(rows[0]).toHaveClass("layer-row-selected");
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
+  it("pans the viewport with the middle button", async () => {
+    await enterEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    fireEvent.pointerDown(canvas, {
+      clientX: 400,
+      clientY: 300,
+      button: 1,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(canvas, {
+      clientX: 460,
+      clientY: 340,
+      button: 1,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(canvas, { button: 1, pointerId: 1 });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
+  });
+
+  it("deselects when dragging empty space", async () => {
+    await enterEditor();
+    const rows = screen.getAllByTestId(/layer-row-/);
+    await userEvent.click(rows[0]);
+    expect(rows[0]).toHaveClass("layer-row-selected");
+    const canvas = document.querySelector(".canvas-area")!;
+    // Drag from a point far outside the poster sheet.
+    fireEvent.pointerDown(canvas, {
+      clientX: 30,
+      clientY: 300,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(canvas, {
+      clientX: 80,
+      clientY: 330,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+    expect(rows[0]).not.toHaveClass("layer-row-selected");
+  });
+
   it("returns to the island view with Done", async () => {
     const user = userEvent.setup();
     await enterEditor();

@@ -61,6 +61,8 @@ export function PosterCanvas({
   const panRef = useRef({ x: 0, y: 0 });
   const fitRef = useRef(0.1);
   const padTopRef = useRef(0);
+  const spaceRef = useRef(false);
+  const panningRef = useRef(false);
   const dragRef = useRef<
     | { kind: "layer"; layerId: string; startX: number; startY: number; layerX: number; layerY: number }
     | { kind: "pan"; startClientX: number; startClientY: number; panStartX: number; panStartY: number }
@@ -72,6 +74,18 @@ export function PosterCanvas({
   onSelectRef.current = onSelect;
   onMoveLayerRef.current = onMoveLayer;
   onZoomChangeRef.current = onZoomChange;
+
+  function updateCursor() {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    canvas.style.cursor = spaceRef.current
+      ? "grab"
+      : panningRef.current
+        ? "grabbing"
+        : "";
+  }
 
   function roundRectPath(
     context: CanvasRenderingContext2D,
@@ -276,14 +290,20 @@ export function PosterCanvas({
     };
   }, [document, selectedId, draw]);
 
-  // Plain wheel and Ctrl or Cmd wheel both zoom toward the cursor. Plain
-  // wheel needs no modifier, so no webview can intercept it.
+  // Wheel zoom at window level. Listening on the window means no element
+  // can swallow the event before the board sees it, and the capture phase
+  // fires before any default webview handling on the target. Plain wheel
+  // needs no modifier, so no GTK or WebKit accelerator can intercept it.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
     const handleWheel = (event: WheelEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(".layer-panel, .editor-toolbar, .app-header")
+      ) {
+        // Wheel over editor chrome scrolls or adjusts that chrome instead.
+        return;
+      }
       event.preventDefault();
       let delta = event.deltaY;
       if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
@@ -291,15 +311,67 @@ export function PosterCanvas({
       } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
         delta *= 100;
       }
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        return;
+      }
       const rect = canvas.getBoundingClientRect();
       zoomBy(
         Math.exp(-delta * 0.0012),
         { x: event.clientX - rect.left, y: event.clientY - rect.top - padTopRef.current },
       );
     };
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", handleWheel);
+    window.addEventListener("wheel", handleWheel, {
+      capture: true,
+      passive: false,
+    });
+    return () =>
+      window.removeEventListener("wheel", handleWheel, { capture: true });
   }, [draw]);
+
+  // Hold Space to pan the viewport: while it is held, any drag moves the
+  // view instead of the content, exactly like a design tool. The cursor
+  // switches to a hand to make the mode visible.
+  useEffect(() => {
+    const isTyping = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || isTyping(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      if (!event.repeat) {
+        spaceRef.current = true;
+        updateCursor();
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code !== "Space") {
+        return;
+      }
+      if (spaceRef.current) {
+        spaceRef.current = false;
+        updateCursor();
+      }
+    };
+    const handleBlur = () => {
+      spaceRef.current = false;
+      panningRef.current = false;
+      updateCursor();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
 
   // Convert a client-space point to document coordinates.
   function toDocumentPoint(
@@ -330,9 +402,15 @@ export function PosterCanvas({
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
+      if (event.button === 1) {
+        event.preventDefault();
+      }
       canvas.setPointerCapture?.(event.pointerId);
+      const panOverride = event.button !== 0 || spaceRef.current;
       const point = toDocumentPoint(event.clientX, event.clientY);
-      const id = hitTestLayer(docRef.current, point.x, point.y);
+      const id = panOverride
+        ? null
+        : hitTestLayer(docRef.current, point.x, point.y);
       if (id) {
         const layer = docRef.current.layers.find((item) => item.id === id);
         if (layer) {
@@ -348,7 +426,11 @@ export function PosterCanvas({
         }
         return;
       }
-      onSelectRef.current(null);
+      if (!panOverride) {
+        onSelectRef.current(null);
+      }
+      panningRef.current = true;
+      updateCursor();
       dragRef.current = {
         kind: "pan",
         startClientX: event.clientX,
@@ -377,6 +459,8 @@ export function PosterCanvas({
     };
     const handlePointerUp = () => {
       dragRef.current = null;
+      panningRef.current = false;
+      updateCursor();
     };
     const handleDoubleClick = (event: MouseEvent) => {
       const point = toDocumentPoint(event.clientX, event.clientY);

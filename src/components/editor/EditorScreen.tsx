@@ -40,14 +40,12 @@ export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
 
-  // Ctrl or Cmd plus Plus, Minus, or 0 zooms the canvas. The wheel and the
-  // toolbar buttons drive the board directly, so this listener only needs
-  // to forward keyboard input.
+  // Plus, Minus, or 0 zooms the canvas with or without Ctrl or Cmd. The
+  // plain keys work even where the webview eats the Ctrl combos, so zoom
+  // never depends on a modifier reaching the DOM. Keys typed into layer
+  // controls are left alone.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!event.ctrlKey && !event.metaKey) {
-        return;
-      }
       const code = event.code;
       const key = event.key;
       const zoomIn =
@@ -60,15 +58,28 @@ export function EditorScreen({ boardRef, onExit }: EditorScreenProps) {
         code === "NumpadSubtract" ||
         key === "-" ||
         key === "_";
-      const reset = code === "Digit0" || code === "Numpad0" || key === "0";
+      const reset =
+        code === "Digit0" || code === "Numpad0" || key === "0";
+      if (!zoomIn && !zoomOut && !reset) {
+        return;
+      }
+      const modifier = event.ctrlKey || event.metaKey;
+      const target = event.target;
+      const typing =
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (typing && !modifier) {
+        return;
+      }
+      event.preventDefault();
       if (zoomIn) {
-        event.preventDefault();
         posterRef.current?.zoomBy(1.25);
       } else if (zoomOut) {
-        event.preventDefault();
         posterRef.current?.zoomBy(0.8);
-      } else if (reset) {
-        event.preventDefault();
+      } else {
         posterRef.current?.resetZoom();
       }
     }
