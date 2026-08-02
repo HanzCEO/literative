@@ -5,6 +5,7 @@ import { useProjects } from "../state/ProjectsContext";
 import {
   defaultGlobalSettings,
   PRESET_PARAMS,
+  type CompletionSettings,
   type GenerationParams,
   type GlobalSettings,
   type EndpointTypeKind,
@@ -225,12 +226,22 @@ function GlobalSettingsDialog({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState<GlobalSettings>(() => ({
     ...(settings ?? defaultGlobalSettings()),
     params: { ...(settings?.params ?? defaultGlobalSettings().params) },
+    completion: {
+      ...(settings?.completion ?? defaultGlobalSettings().completion),
+    },
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function patch(patch: Partial<GlobalSettings>) {
     setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function patchCompletion(patch: Partial<CompletionSettings>) {
+    setDraft((current) => ({
+      ...current,
+      completion: { ...current.completion, ...patch },
+    }));
   }
 
   function patchParams(patch: Partial<GlobalSettings["params"]>) {
@@ -261,6 +272,11 @@ function GlobalSettingsDialog({ onClose }: { onClose: () => void }) {
           strength: clamp01(draft.params.strength),
           cfgScale: clamp01(draft.params.cfgScale),
           n: clampInt(draft.params.n, 1, 8, 1),
+        },
+        completion: {
+          ...draft.completion,
+          baseUrl: draft.completion.baseUrl.trim(),
+          model: draft.completion.model.trim(),
         },
       });
       onClose();
@@ -319,6 +335,49 @@ function GlobalSettingsDialog({ onClose }: { onClose: () => void }) {
               onChange={(event) => patch({ model: event.target.value })}
               placeholder="Optional, for OpenAI compatible APIs"
               aria-label="Model"
+            />
+          </label>
+        </div>
+        <div className="dialog-section">
+          <h3 className="dialog-section-title">Design agent</h3>
+          <p className="dialog-hint">
+            The completion model that plans and edits the poster. It is
+            separate from the image generation model.
+          </p>
+          <label className="dialog-field">
+            <span className="dialog-label">Completion base URL</span>
+            <input
+              type="text"
+              value={draft.completion.baseUrl}
+              onChange={(event) =>
+                patchCompletion({ baseUrl: event.target.value })
+              }
+              placeholder="https://api.openai.com/v1"
+              aria-label="Completion base URL"
+            />
+          </label>
+          <label className="dialog-field">
+            <span className="dialog-label">Completion API key</span>
+            <input
+              type="password"
+              value={draft.completion.apiKey}
+              onChange={(event) =>
+                patchCompletion({ apiKey: event.target.value })
+              }
+              placeholder="Optional"
+              aria-label="Completion API key"
+            />
+          </label>
+          <label className="dialog-field">
+            <span className="dialog-label">Completion model</span>
+            <input
+              type="text"
+              value={draft.completion.model}
+              onChange={(event) =>
+                patchCompletion({ model: event.target.value })
+              }
+              placeholder="Optional, for example gpt-4o"
+              aria-label="Completion model"
             />
           </label>
         </div>

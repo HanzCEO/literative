@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -19,33 +19,6 @@ vi.mock("@tauri-apps/api/webview", () => ({
 
 const mockedInvoke = vi.mocked(invoke);
 const mockedListen = vi.mocked(listen);
-
-/** Stub the canvas 2D context so the board can draw in jsdom. */
-function recordCanvasContext() {
-  const target: Record<string, unknown> = {};
-  const stub = new Proxy(target, {
-    get(_, prop) {
-      if (prop === "canvas") {
-        return { width: 300, height: 150 };
-      }
-      if (typeof prop === "string" && prop in target) {
-        return target[prop];
-      }
-      if (typeof prop === "string") {
-        target[prop] = () => {};
-      }
-      return target[prop as string];
-    },
-    set(_, prop, value) {
-      target[prop as string] = value;
-      return true;
-    },
-  }) as unknown as CanvasRenderingContext2D;
-  const spy = vi
-    .spyOn(HTMLCanvasElement.prototype, "getContext")
-    .mockReturnValue(stub);
-  return spy;
-}
 
 /** Create a project through onboarding and wait for the generation view. */
 async function openEditor() {

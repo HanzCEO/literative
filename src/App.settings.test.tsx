@@ -121,6 +121,40 @@ describe("settings surface", () => {
     expect(screen.getByLabelText("Steps")).toHaveValue(25);
   });
 
+  it("saves completion model settings for the design agent", async () => {
+    const user = userEvent.setup();
+    mockedInvoke.mockResolvedValue(defaultGlobalSettings());
+    await openSettings();
+
+    const baseUrl = screen.getByLabelText("Completion base URL");
+    await user.clear(baseUrl);
+    await user.type(baseUrl, "https://api.example.com/v1");
+    await user.type(
+      screen.getByLabelText("Completion API key"),
+      "agent-secret",
+    );
+    await user.type(
+      screen.getByLabelText("Completion model"),
+      "agent-model-v2",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+
+    const saveCall = mockedInvoke.mock.calls.find(
+      (call) => call[0] === "save_app_settings",
+    );
+    expect(saveCall).toBeDefined();
+    const settings = (saveCall![1] as { settings: { completion: unknown } })
+      .settings;
+    expect(settings.completion).toEqual({
+      baseUrl: "https://api.example.com/v1",
+      apiKey: "agent-secret",
+      model: "agent-model-v2",
+    });
+  });
+
   it("applies the persisted dark theme from settings", async () => {
     mockedInvoke.mockResolvedValue({
       ...defaultGlobalSettings(),
