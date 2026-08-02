@@ -192,6 +192,34 @@ describe("agent chat", () => {
     );
   });
 
+  it("shows Thinking until the first line of a turn arrives", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+
+    expect(screen.getByText("Thinking...")).toBeInTheDocument();
+
+    emitAgentEvent({
+      kind: "toolResult",
+      name: "place_object",
+      ok: true,
+      detail: "placed ellipse as ag-1",
+    });
+    expect(screen.queryByText("Thinking...")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("place_object: placed ellipse as ag-1"),
+    ).toBeInTheDocument();
+  });
+
   it("scrolls the chat to the bottom when a new line streams in", async () => {
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {

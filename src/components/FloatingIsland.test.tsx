@@ -34,11 +34,17 @@ beforeEach(() => {
   onDragDropEvent.mockResolvedValue(vi.fn());
 });
 
-function renderIsland(onRun: (prompt: string) => void = vi.fn()) {
+function renderIsland(
+  onRun: (prompt: string) => void = vi.fn(),
+  onStop: () => void = vi.fn(),
+  busy = false,
+) {
   return render(
     <MoodboardProvider>
       <FloatingIsland
         onRun={onRun}
+        onStop={onStop}
+        busy={busy}
         onOpenSettings={vi.fn()}
       />
     </MoodboardProvider>,
@@ -102,6 +108,38 @@ describe("FloatingIsland", () => {
     await user.type(input, "Retro travel poster");
     await user.click(screen.getByRole("button", { name: "Generate poster" }));
     expect(onRun).toHaveBeenCalledWith("Retro travel poster");
+  });
+
+  it("turns the submit button into a stop button while running", async () => {
+    const user = userEvent.setup();
+    const onRun = vi.fn();
+    const onStop = vi.fn();
+    renderIsland(onRun, onStop, true);
+    const stop = screen.getByRole("button", { name: "Stop agent" });
+    // The running button stays clickable so the run can be aborted.
+    expect(stop).toBeEnabled();
+    await user.click(stop);
+    expect(onStop).toHaveBeenCalledOnce();
+    expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it("shows the submit arrow again once the run finishes", () => {
+    const { rerender } = renderIsland(vi.fn(), vi.fn(), true);
+    expect(
+      screen.getByRole("button", { name: "Stop agent" }),
+    ).toBeInTheDocument();
+    rerender(
+      <MoodboardProvider>
+        <FloatingIsland
+          onRun={vi.fn()}
+          onStop={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />
+      </MoodboardProvider>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Generate poster" }),
+    ).toBeInTheDocument();
   });
 
   it("recalls the previous prompt with the arrow up key", async () => {

@@ -12,6 +12,7 @@ import {
   ImageSquare,
   Plus,
   Sliders,
+  Stop,
   X,
 } from "@phosphor-icons/react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -79,10 +80,12 @@ function pushPromptHistory(
 interface FloatingIslandProps {
   /** The active project id; its prompt history is used when present. */
   projectId?: string | null;
-  /** Disables the input while the agent runs. */
+  /** True while the agent runs; the submit turns into a stop button. */
   busy?: boolean;
   /** Called with the trimmed prompt when the user submits. */
   onRun: (prompt: string) => void;
+  /** Stop the running agent; used by the busy submit button. */
+  onStop?: () => void;
   /** Opens the settings for the active project. */
   onOpenSettings: () => void;
 }
@@ -91,6 +94,7 @@ export function FloatingIsland({
   projectId = null,
   busy = false,
   onRun,
+  onStop,
   onOpenSettings,
 }: FloatingIslandProps) {
   const { references, addFiles, removeReference } = useMoodboard();
@@ -241,6 +245,10 @@ export function FloatingIsland({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (busy) {
+      onStop?.();
+      return;
+    }
     const text = prompt.trim();
     if (!text) {
       return;
@@ -333,12 +341,19 @@ export function FloatingIsland({
         />
         <button
           type="submit"
-          className="island-submit"
-          aria-label="Generate poster"
-          disabled={!canSubmit}
+          className={`island-submit${busy ? " island-submit-running" : ""}`}
+          aria-label={busy ? "Stop agent" : "Generate poster"}
+          disabled={!busy && !canSubmit}
         >
           {busy ? (
-            <CircleNotch size={20} weight="bold" className="spin" />
+            <>
+              <CircleNotch
+                size={20}
+                weight="bold"
+                className="spin island-submit-spin"
+              />
+              <Stop size={20} weight="fill" className="island-submit-stop-icon" />
+            </>
           ) : (
             <ArrowUp size={20} weight="bold" />
           )}

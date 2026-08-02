@@ -371,6 +371,7 @@ body {
 }
 
 .island-submit {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -401,6 +402,34 @@ body {
 .island-submit:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* While the agent runs the green submit keeps spinning; hovering it
+   turns it into a red stop button. */
+.island-submit-running {
+  background: var(--accent);
+}
+
+.island-submit-running .island-submit-stop-icon {
+  display: none;
+}
+
+.island-submit-running:hover:not(:disabled) {
+  background: #e5484d;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .island-submit-running:hover:not(:disabled) {
+  background: #e5484d;
+  color: #ffffff;
+}
+
+.island-submit-running:hover .island-submit-spin {
+  display: none;
+}
+
+.island-submit-running:hover .island-submit-stop-icon {
+  display: inline-flex;
 }
 
 .moodboard {
@@ -1370,24 +1399,6 @@ select option {
   }
 }
 
-.agent-stop {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.agent-stop:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
 .agent-activity {
   list-style: none;
   margin: 0;
@@ -1461,6 +1472,11 @@ select option {
 }
 
 .agent-line-stopped {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.agent-line-thinking {
   font-style: italic;
   color: var(--text-muted);
 }

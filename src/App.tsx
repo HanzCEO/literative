@@ -465,7 +465,6 @@ function Shell() {
         <AgentConsole
           running={agentRunning}
           chat={agentChat}
-          onStop={handleAgentStop}
           onEdit={handleEdit}
           canEdit={agentDocument !== null}
         />
@@ -475,6 +474,7 @@ function Shell() {
           projectId={activeProject?.id ?? null}
           busy={agentRunning}
           onRun={(prompt) => void handleAgentRun(prompt)}
+          onStop={handleAgentStop}
           onOpenSettings={() => setProjectSettingsOpen(true)}
         />
       )}
