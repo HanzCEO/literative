@@ -1420,11 +1420,10 @@ select option {
   pointer-events: auto;
 }
 
-/* Frosted edge fades: they blur whatever the bubbles float over, so
-   the chat reads as continuous above and below the viewport. They sit
-   above the list but let pointer events fall through. The mask ramps
-   the blur strength itself, so the edge dissolves into transparency
-   instead of ending in a hard blurred band. */
+/* Edge fades: a linear gradient that melts into the window
+   background (var(--bg) is what sits behind the floating list, since
+   the board canvas is transparent around the poster). They sit above
+   the list but let pointer events fall through. */
 .agent-console-fade {
   position: absolute;
   left: 0;
@@ -1432,45 +1431,20 @@ select option {
   height: 56px;
   pointer-events: none;
   z-index: 2;
-  backdrop-filter: blur(6px);
 }
 
 .agent-console-fade-top {
   top: 0;
   background: linear-gradient(
     to bottom,
-    var(--bg-elevated),
+    var(--bg),
     transparent
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    black 0%,
-    black 25%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    black 0%,
-    black 25%,
-    transparent 100%
   );
 }
 
 .agent-console-fade-bottom {
   bottom: 0;
-  background: linear-gradient(to top, var(--bg-elevated), transparent);
-  -webkit-mask-image: linear-gradient(
-    to top,
-    black 0%,
-    black 25%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to top,
-    black 0%,
-    black 25%,
-    transparent 100%
-  );
+  background: linear-gradient(to top, var(--bg), transparent);
 }
 
 .agent-bubble {
