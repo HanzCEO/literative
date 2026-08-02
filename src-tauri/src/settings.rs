@@ -79,6 +79,27 @@ pub enum Theme {
     Dark,
 }
 
+/// Configuration for the completion model that drives the agent loop.
+/// These fields are separate from the image generation settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CompletionSettings {
+    /// Base URL of an OpenAI-compatible chat-completions endpoint.
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+}
+
+impl Default for CompletionSettings {
+    fn default() -> Self {
+        Self {
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: String::new(),
+            model: String::new(),
+        }
+    }
+}
+
 /// The full set of user-configurable application settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -94,6 +115,8 @@ pub struct AppSettings {
     /// Target repaint rate when vsync is off.
     pub max_fps: u32,
     pub params: GenerationParams,
+    /// Completion model settings for the design agent.
+    pub completion: CompletionSettings,
 }
 
 impl Default for AppSettings {
@@ -108,6 +131,7 @@ impl Default for AppSettings {
             vsync: true,
             max_fps: 60,
             params: GenerationParams::default(),
+            completion: CompletionSettings::default(),
         }
     }
 }
@@ -164,16 +188,44 @@ mod tests {
                 n: 2,
                 negative_prompt: "blurry".into(),
             },
+            completion: CompletionSettings {
+                base_url: "https://api.example.com/v1".into(),
+                api_key: "completion-secret".into(),
+                model: "gpt-agent".into(),
+            },
         };
         let json = serde_json::to_string(&settings).unwrap();
         assert!(json.contains("\"qwen_image_flash\""));
         assert!(json.contains("\"open_ai_compatible\""));
+        assert!(json.contains("\"completion\""));
+        assert!(json.contains("\"gpt-agent\""));
         let parsed: AppSettings = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.preset, PresetKind::QwenImageFlash);
         assert_eq!(parsed.endpoint_type, EndpointType::OpenAiCompatible);
         assert_eq!(parsed.params.sampler, "DPM++ 2M Karras");
         assert_eq!(parsed.params.negative_prompt, "blurry");
-        assert_eq!(parsed.theme, Theme::Dark);
+        assert_eq!(parsed.completion.model, "gpt-agent");
+        assert_eq!(parsed.completion.base_url, "https://api.example.com/v1");
+    }
+
+    #[test]
+    fn stored_settings_without_completion_defaults() {
+        // Settings saved before the completion model existed must load.
+        let old_json = r#"{
+          "preset": "krea_2_turbo",
+          "endpointType": "stable_diffusion",
+          "endpoint": "http://127.0.0.1:7860",
+          "apiKey": "",
+          "model": "",
+          "theme": "light",
+          "vsync": true,
+          "maxFps": 60,
+          "params": {"width": 1024, "height": 1024, "steps": 8, "strength": 0.6, "cfgScale": 7.0, "sampler": "Euler a", "n": 1, "negativePrompt": ""}
+        }"#;
+        let parsed: AppSettings = serde_json::from_str(old_json).unwrap();
+        assert_eq!(parsed.completion.model, "");
+        assert_eq!(parsed.completion.base_url, "https://api.openai.com/v1");
+        assert_eq!(parsed.theme, Theme::Light);
     }
 
     #[test]
@@ -192,6 +244,7 @@ mod tests {
             vsync: true,
             max_fps: 60,
             params: GenerationParams::default(),
+            completion: CompletionSettings::default(),
         };
         settings.save(&path).unwrap();
         let loaded = AppSettings::load(&path).unwrap();

@@ -4,7 +4,7 @@
 //! responds with a canned JSON body, then asserts on the client result.
 
 use literative_lib::ai_client::{self, GenerationRequest, ReferencePayload};
-use literative_lib::settings::{AppSettings, PresetKind};
+use literative_lib::settings::{AppSettings, EndpointType};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
@@ -83,9 +83,9 @@ fn run_server(
     (port, seen)
 }
 
-fn default_request(port: u16, preset: PresetKind) -> GenerationRequest {
+fn default_request(port: u16, endpoint_type: EndpointType) -> GenerationRequest {
     let mut settings = AppSettings::default();
-    settings.preset = preset;
+    settings.endpoint_type = endpoint_type;
     settings.endpoint = format!("http://127.0.0.1:{port}");
     GenerationRequest {
         settings,
@@ -100,7 +100,7 @@ async fn openai_generations_uses_json_endpoint() {
     let server_png = png.clone();
     let (port, seen) =
         run_server(move |_| (200, format!(r#"{{"data":[{{"b64_json":"{server_png}"}}]}}"#)));
-    let result = ai_client::generate(default_request(port, PresetKind::OpenAiCompatible))
+    let result = ai_client::generate(default_request(port, EndpointType::OpenAiCompatible))
         .await
         .unwrap();
     assert!(result.data_url.starts_with("data:image/png;base64,"));
@@ -117,7 +117,7 @@ async fn openai_edits_uses_multipart_with_references() {
     let server_png = png.clone();
     let (port, seen) =
         run_server(move |_| (200, format!(r#"{{"data":[{{"b64_json":"{server_png}"}}]}}"#)));
-    let mut request = default_request(port, PresetKind::OpenAiCompatible);
+    let mut request = default_request(port, EndpointType::OpenAiCompatible);
     request.references = vec![ReferencePayload {
         name: "mood.png".into(),
         mime_type: "image/png".into(),
@@ -156,7 +156,7 @@ async fn openai_url_result_is_fetched() {
         (200, format!(r#"{{"data":[{{"url":"{image_url}"}}]}}"#))
     });
 
-    let result = ai_client::generate(default_request(port, PresetKind::OpenAiCompatible))
+    let result = ai_client::generate(default_request(port, EndpointType::OpenAiCompatible))
         .await
         .unwrap();
     assert!(result.data_url.starts_with("data:image/png;base64,"));
@@ -166,7 +166,7 @@ async fn openai_url_result_is_fetched() {
 async fn stable_diffusion_txt2img_uses_json_endpoint() {
     let png = base64_png();
     let (port, seen) = run_server(move |_| (200, format!(r#"{{"images":["{png}"]}}"#)));
-    let result = ai_client::generate(default_request(port, PresetKind::StableDiffusion))
+    let result = ai_client::generate(default_request(port, EndpointType::StableDiffusion))
         .await
         .unwrap();
     assert!(result.data_url.starts_with("data:image/png;base64,"));
@@ -181,7 +181,7 @@ async fn stable_diffusion_img2img_sends_init_images() {
     let png = base64_png();
     let server_png = png.clone();
     let (port, seen) = run_server(move |_| (200, format!(r#"{{"images":["{server_png}"]}}"#)));
-    let mut request = default_request(port, PresetKind::StableDiffusion);
+    let mut request = default_request(port, EndpointType::StableDiffusion);
     request.references = vec![ReferencePayload {
         name: "mood.png".into(),
         mime_type: "image/png".into(),
@@ -198,7 +198,7 @@ async fn stable_diffusion_img2img_sends_init_images() {
 #[tokio::test]
 async fn server_error_is_propagated() {
     let (port, _seen) = run_server(|_| (500, r#"{"error":"boom"}"#.into()));
-    let result = ai_client::generate(default_request(port, PresetKind::OpenAiCompatible))
+    let result = ai_client::generate(default_request(port, EndpointType::OpenAiCompatible))
         .await;
     let err = result.unwrap_err();
     assert!(err.to_string().contains("500"), "unexpected error: {err}");
@@ -207,7 +207,7 @@ async fn server_error_is_propagated() {
 #[tokio::test]
 async fn empty_image_list_is_an_error() {
     let (port, _seen) = run_server(|_| (200, r#"{"data":[]}"#.into()));
-    let result = ai_client::generate(default_request(port, PresetKind::OpenAiCompatible))
+    let result = ai_client::generate(default_request(port, EndpointType::OpenAiCompatible))
         .await;
     assert!(result.is_err());
 }
@@ -217,7 +217,7 @@ async fn connection_refused_is_an_error() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener);
-    let result = ai_client::generate(default_request(port, PresetKind::OpenAiCompatible))
+    let result = ai_client::generate(default_request(port, EndpointType::OpenAiCompatible))
         .await;
     assert!(result.is_err());
 }

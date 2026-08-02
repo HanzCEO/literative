@@ -4,6 +4,7 @@
 //! request schemas: an OpenAI-compatible images API, or a Stable
 //! Diffusion style API (AUTOMATIC1111).
 
+pub mod chat;
 pub mod openai;
 pub mod stable_diffusion;
 
