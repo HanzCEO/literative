@@ -469,6 +469,46 @@ describe("poster editor", () => {
     }
   });
 
+  it("keeps the sheet position when double-clicking empty board", async () => {
+    const { transforms, spy } = recordEditorTransforms();
+    const widthSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientWidth", "get")
+      .mockReturnValue(300);
+    const heightSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, "clientHeight", "get")
+      .mockReturnValue(150);
+    await enterEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    vi.useFakeTimers();
+    try {
+      // Drag the sheet right by 30 CSS pixels from inside the frame.
+      fireEvent.pointerDown(canvas, {
+        clientX: 150,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 180,
+        clientY: 130,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      fireEvent.pointerUp(canvas, { button: 0, pointerId: 1 });
+      const afterDrag = lastTransformOffset(transforms);
+      // Double-click on empty board space far outside the sheet.
+      fireEvent.dblClick(canvas, { clientX: 30, clientY: 300 });
+      // The view reset must not move the sheet back to the center.
+      expect(lastTransformOffset(transforms)).toBeCloseTo(afterDrag, 5);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
+  });
+
   it("deselects when dragging empty space", async () => {
     await enterEditor();
     const rows = screen.getAllByTestId(/layer-row-/);

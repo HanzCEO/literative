@@ -295,14 +295,12 @@ export function useBoardViewport(
     redrawRef.current();
   }
 
-  /** Reset zoom to fit, clear the pan offset, and re-center the sheet. */
+  /** Reset zoom to fit and clear the pan offset. The sheet stays put. */
   function resetView() {
     panCacheValidRef.current = false;
     state.zoom = 1;
     state.panX = 0;
     state.panY = 0;
-    state.sheetX = 0;
-    state.sheetY = 0;
     zoomChangeRef.current(1);
     redrawRef.current();
   }
