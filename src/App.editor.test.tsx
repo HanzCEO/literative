@@ -229,17 +229,20 @@ describe("poster editor", () => {
 
   it("zooms with the Ctrl wheel", async () => {
     await enterEditor();
-    const wrap = document.querySelector(".editor-canvas-wrap");
-    expect(wrap).not.toBeNull();
-    fireEvent.wheel(wrap!, { deltaY: -100, ctrlKey: true });
+    const canvas = document.querySelector(".poster-canvas");
+    expect(canvas).not.toBeNull();
+    fireEvent.wheel(canvas!, { deltaY: -100, ctrlKey: true });
     expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 113%");
   });
 
-  it("keeps the zoom on a plain wheel scroll", async () => {
+  it("zooms with the plain wheel", async () => {
     await enterEditor();
-    const wrap = document.querySelector(".editor-canvas-wrap");
-    expect(wrap).not.toBeNull();
-    fireEvent.wheel(wrap!, { deltaY: -100 });
+    const canvas = document.querySelector(".poster-canvas");
+    expect(canvas).not.toBeNull();
+    // Plain wheel needs no modifier, so no webview can intercept it.
+    fireEvent.wheel(canvas!, { deltaY: -100 });
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 113%");
+    fireEvent.wheel(canvas!, { deltaY: 100 });
     expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 100%");
   });
 
@@ -257,10 +260,10 @@ describe("poster editor", () => {
 
   it("zooms with line-mode wheel deltas", async () => {
     await enterEditor();
-    const wrap = document.querySelector(".editor-canvas-wrap");
-    expect(wrap).not.toBeNull();
+    const canvas = document.querySelector(".poster-canvas");
+    expect(canvas).not.toBeNull();
     // WebKitGTK reports line deltas; one line must still zoom visibly.
-    fireEvent.wheel(wrap!, { deltaY: -3, deltaMode: 1, ctrlKey: true });
+    fireEvent.wheel(canvas!, { deltaY: -3, deltaMode: 1 });
     expect(screen.getByLabelText("Zoom level")).toHaveTextContent("Zoom 106%");
   });
 
