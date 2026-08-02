@@ -642,4 +642,108 @@ describe("project persistence", () => {
     const document = JSON.parse(saved!) as { layers: unknown[] };
     expect(document.layers).toHaveLength(2);
   });
+
+  it("saves the agent chat under the project key", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+    emitAgentEvent({
+      kind: "toolResult",
+      name: "place_object",
+      ok: true,
+      detail: "placed ellipse as ag-1",
+    });
+    emitAgentEvent({ kind: "done", summary: "Finished the poster." });
+
+    const projects = JSON.parse(
+      localStorage.getItem("literative.projects") ?? "[]",
+    ) as { id: string }[];
+    const saved = localStorage.getItem(
+      `literative.project.${projects[0].id}.chat`,
+    );
+    expect(saved).not.toBeNull();
+    const chat = JSON.parse(saved!) as {
+      kind: string;
+      prompt?: string;
+    }[];
+    expect(chat).toHaveLength(2);
+    expect(chat[0]).toMatchObject({ kind: "user", prompt: "A jazz poster" });
+    expect(chat[1]).toMatchObject({ kind: "agent", number: 1 });
+  });
+
+  it("restores the saved chat when the project reopens", async () => {
+    seedProject();
+    localStorage.setItem(
+      "literative.project.p1.chat",
+      JSON.stringify([
+        { id: 1, kind: "user", prompt: "saved prompt" },
+        {
+          id: 2,
+          kind: "agent",
+          number: 1,
+          items: [{ id: 1, kind: "done", text: "Saved summary." }],
+        },
+      ]),
+    );
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Open the seeded project; the saved session bubbles appear.
+    await user.click(
+      screen.getByRole("button", { name: /^Restored project/ }),
+    );
+    expect(
+      await screen.findByRole("complementary", {
+        name: "Design agent chat",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("saved prompt")).toBeInTheDocument();
+    expect(screen.getByText("Saved summary.")).toBeInTheDocument();
+  });
+
+  it("clears the saved chat when the project is deleted", async () => {
+    seedProject();
+    localStorage.setItem(
+      "literative.project.p1.chat",
+      JSON.stringify([{ id: 1, kind: "user", prompt: "saved prompt" }]),
+    );
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Options for Restored project" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(
+      localStorage.getItem("literative.project.p1.chat"),
+    ).toBeNull();
+  });
 });

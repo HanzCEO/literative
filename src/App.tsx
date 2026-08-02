@@ -46,6 +46,8 @@ function Shell() {
     setTurnCount,
     updateProjectDocument,
     getProjectDocument,
+    updateProjectChat,
+    getProjectChat,
   } = useProjects();
   const { settings: globalSettings } = useSettings();
   const [view, setView] = useState<View>("projects");
@@ -127,6 +129,15 @@ function Shell() {
       setAgentDocument(editorDocument);
     }
   }, [view, editorDocument]);
+
+  // Persist the agent chat to the active project so the session
+  // survives restarts. An empty chat (navigation away) never clears
+  // the saved session; only project removal clears it.
+  useEffect(() => {
+    if (agentChat.length > 0 && activeProject) {
+      updateProjectChat(activeProject.id, agentChat);
+    }
+  }, [agentChat, updateProjectChat]);
 
   // Stream agent events into the document, the activity log, and the
   // running flag.
@@ -227,6 +238,27 @@ function Shell() {
     lastTurnNumberRef.current = 0;
   }
 
+  /** Restore a saved session chat and continue its counters. */
+  function restoreChat(messages: AgentChatMessage[]) {
+    setAgentChat(messages);
+    setAgentStarted(messages.length > 0);
+    let maxMessage = 0;
+    let maxItem = 0;
+    let lastTurn = 0;
+    for (const message of messages) {
+      maxMessage = Math.max(maxMessage, message.id);
+      if (message.kind === "agent" && message.number) {
+        lastTurn = Math.max(lastTurn, message.number);
+      }
+      for (const item of message.items ?? []) {
+        maxItem = Math.max(maxItem, item.id);
+      }
+    }
+    messageIdRef.current = maxMessage;
+    itemIdRef.current = maxItem;
+    lastTurnNumberRef.current = lastTurn;
+  }
+
   async function handleAgentRun(prompt: string) {
     const size = activeProject?.posterSize;
     if (!size) {
@@ -296,8 +328,9 @@ function Shell() {
   function handleOpenProject(projectId: string) {
     selectProject(projectId);
     resetGeneration();
-    // Restore the saved design so it survives app restarts.
+    // Restore the saved design and session so both survive restarts.
     setAgentDocument(getProjectDocument(projectId));
+    restoreChat(getProjectChat(projectId));
     setView("editor");
   }
 
@@ -312,9 +345,11 @@ function Shell() {
   function handleExitEditor() {
     setView("editor");
     resetGeneration();
-    // Keep the design on the board after the full editor closes.
+    // Keep the design and session on the board after the full editor
+    // closes.
     if (activeProject) {
       setAgentDocument(getProjectDocument(activeProject.id));
+      restoreChat(getProjectChat(activeProject.id));
     }
   }
 
@@ -437,6 +472,7 @@ function Shell() {
       )}
       {view === "editor" && (
         <FloatingIsland
+          projectId={activeProject?.id ?? null}
           busy={agentRunning}
           onRun={(prompt) => void handleAgentRun(prompt)}
           onOpenSettings={() => setProjectSettingsOpen(true)}

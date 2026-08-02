@@ -178,6 +178,52 @@ describe("FloatingIsland", () => {
     expect(input).toHaveValue("repeat poster");
   });
 
+  it("keeps prompt history separate per project", async () => {
+    const user = userEvent.setup();
+    const first = render(
+      <MoodboardProvider>
+        <FloatingIsland
+          projectId="project-a"
+          onRun={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />
+      </MoodboardProvider>,
+    );
+    const input = screen.getByRole("textbox", { name: "Poster prompt" });
+    await user.type(input, "poster for A");
+    await user.click(screen.getByRole("button", { name: "Generate poster" }));
+    first.unmount();
+
+    // Another project starts with an empty history.
+    const second = render(
+      <MoodboardProvider>
+        <FloatingIsland
+          projectId="project-b"
+          onRun={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />
+      </MoodboardProvider>,
+    );
+    const otherInput = screen.getByRole("textbox", { name: "Poster prompt" });
+    fireEvent.keyDown(otherInput, { key: "ArrowUp" });
+    expect(otherInput).toHaveValue("");
+    second.unmount();
+
+    // Reopening project A recalls its own history.
+    render(
+      <MoodboardProvider>
+        <FloatingIsland
+          projectId="project-a"
+          onRun={vi.fn()}
+          onOpenSettings={vi.fn()}
+        />
+      </MoodboardProvider>,
+    );
+    const reopened = screen.getByRole("textbox", { name: "Poster prompt" });
+    fireEvent.keyDown(reopened, { key: "ArrowUp" });
+    expect(reopened).toHaveValue("poster for A");
+  });
+
   it("adds dropped image paths to the moodboard", async () => {
     mockedInvoke.mockResolvedValue([
       { name: "one.png", mimeType: "image/png", dataBase64: "b25l" },

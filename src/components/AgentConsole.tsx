@@ -1,28 +1,10 @@
 import {
   PencilSimple,
-  Robot,
   Stop,
 } from "@phosphor-icons/react";
+import type { AgentChatMessage } from "../lib/agentChat";
 
-/** One streamed line inside an agent turn bubble. */
-export interface AgentTurnItem {
-  id: number;
-  kind: "tool" | "result" | "image" | "done" | "stopped" | "error";
-  text: string;
-  ok?: boolean;
-}
-
-/** One message bubble in the agent chat. */
-export interface AgentChatMessage {
-  id: number;
-  kind: "user" | "agent";
-  /** The user's prompt, for user messages. */
-  prompt?: string;
-  /** The turn number, for agent messages. */
-  number?: number;
-  /** The streamed lines inside an agent turn bubble. */
-  items?: AgentTurnItem[];
-}
+export type { AgentChatMessage, AgentTurnItem } from "../lib/agentChat";
 
 interface AgentConsoleProps {
   /** True while an agent run is active. */
@@ -38,10 +20,12 @@ interface AgentConsoleProps {
 }
 
 /**
- * The agent chat: a viewport-fixed panel on the left. The user prompt
+ * The agent chat: a viewport-fixed column on the left. The user prompt
  * is its own bubble on the right, and each agent turn streams into its
  * own separated bubble on the left. The prompt itself is typed only
- * into the floating island input.
+ * into the floating island input. The column has no panel chrome: the
+ * bubbles float directly over the canvas, and the stop and edit
+ * controls hover above the newest bubble.
  */
 export function AgentConsole({
   running,
@@ -50,32 +34,36 @@ export function AgentConsole({
   onEdit,
   canEdit = false,
 }: AgentConsoleProps) {
+  const showEdit = canEdit && !running;
+  const showStop = running;
   return (
     <aside className="agent-console" aria-label="Design agent chat">
-      <div className="agent-console-header">
-        <Robot size={15} weight="duotone" />
-        <span>Design agent</span>
-        {canEdit && !running && (
-          <button
-            type="button"
-            className="agent-edit"
-            aria-label="Open agent result in editor"
-            onClick={onEdit}
-          >
-            <PencilSimple size={14} weight="bold" />
-          </button>
-        )}
-        {running && (
-          <button
-            type="button"
-            className="agent-stop"
-            aria-label="Stop agent"
-            onClick={onStop}
-          >
-            <Stop size={14} weight="bold" />
-          </button>
-        )}
-      </div>
+      {(showEdit || showStop) && (
+        <div className="agent-console-actions">
+          {showEdit && (
+            <button
+              type="button"
+              className="agent-edit"
+              aria-label="Open agent result in editor"
+              title="Open in editor"
+              onClick={onEdit}
+            >
+              <PencilSimple size={14} weight="bold" />
+            </button>
+          )}
+          {showStop && (
+            <button
+              type="button"
+              className="agent-stop"
+              aria-label="Stop agent"
+              title="Stop agent"
+              onClick={onStop}
+            >
+              <Stop size={14} weight="bold" />
+            </button>
+          )}
+        </div>
+      )}
       <ul className="agent-activity" aria-label="Agent activity">
         {chat.map((message) =>
           message.kind === "user" ? (

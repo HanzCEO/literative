@@ -1074,14 +1074,6 @@ select option {
   background: var(--bg-hover);
 }
 
-/* The active project: a left rail, clearly distinct from a hover
-   border. The list already orders by last change, so the rail only
-   marks which project is open. */
-.project-card-active {
-  border-left: 3px solid var(--accent);
-  padding-left: 14px;
-}
-
 .project-card-open {
   flex: 1;
   min-width: 0;
@@ -1305,12 +1297,19 @@ select option {
   flex-direction: column;
   width: min(340px, calc(100vw - 32px));
   max-height: min(62vh, 560px);
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--bg-elevated);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
-  overflow: hidden;
+  /* No panel chrome: the bubbles float directly over the canvas, so
+     pointer events fall through everywhere except the bubbles. */
+  pointer-events: none;
+}
+
+/* The transient stop and edit actions hover above the newest bubble,
+   detached from any panel background. */
+.agent-console-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  pointer-events: auto;
 }
 
 /* The animated agent cursor: a pinging ring over the board while a
@@ -1371,19 +1370,7 @@ select option {
   }
 }
 
-.agent-console-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
-}
-
 .agent-stop {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1404,13 +1391,14 @@ select option {
 .agent-activity {
   list-style: none;
   margin: 0;
-  padding: 10px 2px 2px 2px;
+  padding: 0 2px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  pointer-events: auto;
 }
 
 .agent-bubble {
@@ -1431,6 +1419,7 @@ select option {
   color: #ffffff;
   border-bottom-right-radius: 4px;
   white-space: pre-wrap;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
 }
 
 .agent-bubble-turn {
@@ -1440,6 +1429,7 @@ select option {
   border: 1px solid var(--border);
   border-bottom-left-radius: 4px;
   color: var(--text-secondary);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
 .agent-bubble-header {
@@ -1476,7 +1466,6 @@ select option {
 }
 
 .agent-edit {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -36,15 +36,19 @@ function isImagePath(path: string): boolean {
   return dot !== -1 && IMAGE_EXTENSIONS.has(path.slice(dot + 1).toLowerCase());
 }
 
-/** Storage key for the submitted prompt history. */
-const PROMPT_HISTORY_KEY = "literative.promptHistory";
+/** Storage key for the submitted prompt history of a project. */
+function promptHistoryKey(projectId: string | null): string {
+  return projectId
+    ? `literative.project.${projectId}.promptHistory`
+    : "literative.promptHistory";
+}
 /** Cap on how many prompts the history keeps. */
 const MAX_PROMPT_HISTORY = 50;
 
 /** Load the persisted prompt history, oldest first. */
-function loadPromptHistory(): string[] {
+function loadPromptHistory(projectId: string | null): string[] {
   try {
-    const raw = localStorage.getItem(PROMPT_HISTORY_KEY);
+    const raw = localStorage.getItem(promptHistoryKey(projectId));
     if (!raw) {
       return [];
     }
@@ -73,6 +77,8 @@ function pushPromptHistory(
 }
 
 interface FloatingIslandProps {
+  /** The active project id; its prompt history is used when present. */
+  projectId?: string | null;
   /** Disables the input while the agent runs. */
   busy?: boolean;
   /** Called with the trimmed prompt when the user submits. */
@@ -82,6 +88,7 @@ interface FloatingIslandProps {
 }
 
 export function FloatingIsland({
+  projectId = null,
   busy = false,
   onRun,
   onOpenSettings,
@@ -89,11 +96,21 @@ export function FloatingIsland({
   const { references, addFiles, removeReference } = useMoodboard();
   const [prompt, setPrompt] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [history, setHistory] = useState<string[]>(loadPromptHistory);
+  const [history, setHistory] = useState<string[]>(() =>
+    loadPromptHistory(projectId),
+  );
   // Null means the live draft; an index walks the history, oldest first.
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   // The draft saved when the user first steps back into the history.
   const draftRef = useRef("");
+
+  // Reload the history when the active project changes.
+  useEffect(() => {
+    setHistory(loadPromptHistory(projectId));
+    setHistoryIndex(null);
+    draftRef.current = "";
+    setPrompt("");
+  }, [projectId]);
 
   function stepHistory(direction: "back" | "forward") {
     if (direction === "back") {
@@ -232,7 +249,10 @@ export function FloatingIsland({
     setHistory((current) => {
       const next = pushPromptHistory(current, text);
       try {
-        localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(next));
+        localStorage.setItem(
+          promptHistoryKey(projectId),
+          JSON.stringify(next),
+        );
       } catch {
         // Storage can be unavailable; the session history still works.
       }

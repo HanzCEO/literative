@@ -16,6 +16,7 @@ import {
   type ProjectSettings,
 } from "./settingsTypes";
 import type { PosterDocument } from "./posterDocument";
+import type { AgentChatMessage } from "../lib/agentChat";
 
 export interface Project {
   id: string;
@@ -51,6 +52,10 @@ interface ProjectsContextValue {
   updateProjectDocument: (id: string, document: PosterDocument | null) => void;
   /** Load the persisted poster document for a project, or null. */
   getProjectDocument: (id: string) => PosterDocument | null;
+  /** Persist the agent chat for a project; [] clears it. */
+  updateProjectChat: (id: string, chat: AgentChatMessage[]) => void;
+  /** Load the persisted agent chat for a project. */
+  getProjectChat: (id: string) => AgentChatMessage[];
 }
 
 const STORAGE_KEY = "literative.projects";
@@ -59,6 +64,36 @@ const ACTIVE_KEY = "literative.activeProject";
 /** Per-project document storage key; the list stays separate and small. */
 function documentKey(id: string): string {
   return `literative.project.${id}.document`;
+}
+
+/** Per-project agent chat storage key. */
+function chatKey(id: string): string {
+  return `literative.project.${id}.chat`;
+}
+
+function saveProjectChat(id: string, chat: AgentChatMessage[]): void {
+  try {
+    if (chat.length > 0) {
+      localStorage.setItem(chatKey(id), JSON.stringify(chat));
+    } else {
+      localStorage.removeItem(chatKey(id));
+    }
+  } catch {
+    // Storage can be unavailable or full; the session keeps working.
+  }
+}
+
+function loadProjectChat(id: string): AgentChatMessage[] {
+  try {
+    const raw = localStorage.getItem(chatKey(id));
+    if (!raw) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as AgentChatMessage[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 function saveProjectDocument(id: string, document: PosterDocument | null): void {
@@ -171,6 +206,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     );
     setActiveProjectId((current) => (current === id ? null : current));
     saveProjectDocument(id, null);
+    saveProjectChat(id, []);
   }, []);
 
   const updateProjectDocument = useCallback(
@@ -182,6 +218,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const getProjectDocument = useCallback((id: string) => {
     return loadProjectDocument(id);
+  }, []);
+
+  const updateProjectChat = useCallback(
+    (id: string, chat: AgentChatMessage[]) => {
+      saveProjectChat(id, chat);
+    },
+    [],
+  );
+
+  const getProjectChat = useCallback((id: string) => {
+    return loadProjectChat(id);
   }, []);
 
   const updateProjectSettings = useCallback(
@@ -222,6 +269,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setTurnCount,
       updateProjectDocument,
       getProjectDocument,
+      updateProjectChat,
+      getProjectChat,
     }),
     [
       projects,
@@ -233,6 +282,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       setTurnCount,
       updateProjectDocument,
       getProjectDocument,
+      updateProjectChat,
+      getProjectChat,
     ],
   );
 

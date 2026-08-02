@@ -109,13 +109,36 @@ describe("project menu", () => {
     expect(names).toEqual(["Newer", "Legacy", "Older"]);
   });
 
-  it("marks the active project with the card rail class", async () => {
+  it("does not mark the active project with any rail accent", async () => {
     localStorage.setItem("literative.activeProject", "p1");
     renderPage();
-    const active = document.querySelector(".project-card-active");
-    expect(active).not.toBeNull();
-    expect(active?.querySelector(".project-card-name")?.textContent).toBe(
-      "Demo",
+    // The list orders by last change; no border or rail marks the open
+    // project, so a stuck-looking accent can never appear.
+    expect(document.querySelector(".project-card-active")).toBeNull();
+  });
+
+  it("shows the timestamp as DD/MM/YYYY HH:MM with a relative part", () => {
+    // Local-time date parts so the assertion is timezone-independent.
+    const updated = new Date(2026, 2, 1, 9, 5, 0);
+    const later = new Date(updated.getTime() + (2 * 3600 + 3 * 60) * 1000);
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: "p1",
+          name: "Demo",
+          description: "",
+          createdAt: updated.toISOString(),
+          updatedAt: updated.toISOString(),
+          posterSize: { width: 1024, height: 1536 },
+        },
+      ]),
     );
+    vi.useFakeTimers();
+    vi.setSystemTime(later);
+    renderPage();
+    expect(screen.getByText(/01\/03\/2026 09:05/)).toBeInTheDocument();
+    expect(screen.getByText(/2 hours ago/)).toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

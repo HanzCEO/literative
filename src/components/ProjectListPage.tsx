@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DotsThree, Files, Plus, Trash } from "@phosphor-icons/react";
 import { useProjects, type Project } from "../state/ProjectsContext";
+import { formatProjectTimestamp } from "../lib/formatTime";
 
 interface ProjectListPageProps {
   onNewProject: () => void;
@@ -11,7 +12,7 @@ export function ProjectListPage({
   onNewProject,
   onOpenProject,
 }: ProjectListPageProps) {
-  const { projects, activeProject, removeProject } = useProjects();
+  const { projects, removeProject } = useProjects();
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   // Order by the last change, newest first; ISO timestamps sort
@@ -64,13 +65,7 @@ export function ProjectListPage({
         <ul className="project-list">
           {ordered.map((project) => (
             <li key={project.id}>
-              <div
-                className={`project-card${
-                  activeProject?.id === project.id
-                    ? " project-card-active"
-                    : ""
-                }`}
-              >
+              <div className="project-card">
                 <button
                   type="button"
                   className="project-card-open"
@@ -83,7 +78,7 @@ export function ProjectListPage({
                     </span>
                   )}
                   <span className="project-card-meta">
-                    {new Date(project.updatedAt).toLocaleDateString()}
+                    {formatProjectTimestamp(project.updatedAt)}
                   </span>
                 </button>
                 <div className="project-menu">
