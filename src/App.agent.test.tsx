@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import App from "./App";
 import type { AgentEvent } from "./lib/agent";
+import type { Layer } from "./state/posterDocument";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -442,5 +443,203 @@ describe("agent chat", () => {
         "generate_image failed: Refused: the image model cannot render text.",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+describe("project persistence", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mockedInvoke.mockReset();
+    onDragDropEvent.mockReset();
+    onDragDropEvent.mockResolvedValue(vi.fn());
+    mockedListen.mockReset();
+    mockedListen.mockResolvedValue(vi.fn());
+  });
+
+  const savedLayer: Layer = {
+    id: "ag-1",
+    kind: "shape",
+    name: "Ellipse",
+    visible: true,
+    opacity: 1,
+    blendMode: "source-over",
+    x: 100,
+    y: 200,
+    rotation: 0,
+    shapeType: "ellipse",
+    fill: "#e5484d",
+    stroke: "#1a1a1f",
+    strokeWidth: 0,
+    cornerRadius: 0,
+    width: 300,
+    height: 300,
+  };
+
+  function seedProject(name = "Restored project") {
+    localStorage.setItem(
+      "literative.projects",
+      JSON.stringify([
+        {
+          id: "p1",
+          name,
+          description: "",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          posterSize: { width: 1024, height: 1536 },
+        },
+      ]),
+    );
+  }
+
+  function seedDocument() {
+    localStorage.setItem(
+      "literative.project.p1.document",
+      JSON.stringify({
+        width: 1024,
+        height: 1536,
+        sheetX: 0,
+        sheetY: 0,
+        layers: [savedLayer],
+      }),
+    );
+  }
+
+  it("saves the agent document under the project key", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({
+      kind: "document",
+      document: {
+        width: 1024,
+        height: 1536,
+        sheetX: 0,
+        sheetY: 0,
+        layers: [savedLayer],
+      },
+    });
+    emitAgentEvent({ kind: "done", summary: "Finished the poster." });
+
+    const projects = JSON.parse(
+      localStorage.getItem("literative.projects") ?? "[]",
+    ) as { id: string }[];
+    expect(projects).toHaveLength(1);
+    const saved = localStorage.getItem(
+      `literative.project.${projects[0].id}.document`,
+    );
+    expect(saved).not.toBeNull();
+    const document = JSON.parse(saved!) as { layers: unknown[] };
+    expect(document.layers).toHaveLength(1);
+    expect(document.layers[0]).toMatchObject({ id: "ag-1" });
+  });
+
+  it("restores the saved document when the project reopens", async () => {
+    seedProject();
+    seedDocument();
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    // Open the seeded project from the list.
+    await user.click(
+      screen.getByRole("button", { name: /^Restored project/ }),
+    );
+    // The board carries the design, not the empty base canvas.
+    expect(
+      screen.queryByRole("img", {
+        name: "Poster base canvas 1024 by 1536 pixels",
+      }),
+    ).not.toBeInTheDocument();
+
+    // A new run builds on the restored layers.
+    await submitPrompt("make it bigger");
+    const call = mockedInvoke.mock.calls.find(([name]) => name === "agent_run");
+    const request = (call as unknown as [string, { request: unknown }])[1]
+      .request as { document: { layers: unknown[] } };
+    expect(request.document.layers).toHaveLength(1);
+    expect(request.document.layers[0]).toMatchObject({ id: "ag-1" });
+  });
+
+  it("clears the saved document when the project is deleted", async () => {
+    seedProject();
+    seedDocument();
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Options for Restored project" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(
+      localStorage.getItem("literative.project.p1.document"),
+    ).toBeNull();
+  });
+
+  it("persists edits made in the full editor", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({
+      kind: "document",
+      document: {
+        width: 1024,
+        height: 1536,
+        sheetX: 0,
+        sheetY: 0,
+        layers: [savedLayer],
+      },
+    });
+    emitAgentEvent({ kind: "done", summary: "Finished the poster." });
+
+    // Open the agent result in the full editor and add a text layer.
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: "Open agent result in editor" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add text" }));
+    await screen.findAllByTestId(/layer-row-/);
+
+    const projects = JSON.parse(
+      localStorage.getItem("literative.projects") ?? "[]",
+    ) as { id: string }[];
+    const saved = localStorage.getItem(
+      `literative.project.${projects[0].id}.document`,
+    );
+    const document = JSON.parse(saved!) as { layers: unknown[] };
+    expect(document.layers).toHaveLength(2);
   });
 });

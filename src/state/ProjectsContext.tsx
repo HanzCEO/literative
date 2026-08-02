@@ -15,6 +15,7 @@ import {
   defaultProjectSettings,
   type ProjectSettings,
 } from "./settingsTypes";
+import type { PosterDocument } from "./posterDocument";
 
 export interface Project {
   id: string;
@@ -46,10 +47,40 @@ interface ProjectsContextValue {
   ) => void;
   /** Record how many agent turns a project has completed. */
   setTurnCount: (id: string, count: number) => void;
+  /** Persist the poster document for a project; null clears it. */
+  updateProjectDocument: (id: string, document: PosterDocument | null) => void;
+  /** Load the persisted poster document for a project, or null. */
+  getProjectDocument: (id: string) => PosterDocument | null;
 }
 
 const STORAGE_KEY = "literative.projects";
 const ACTIVE_KEY = "literative.activeProject";
+
+/** Per-project document storage key; the list stays separate and small. */
+function documentKey(id: string): string {
+  return `literative.project.${id}.document`;
+}
+
+function saveProjectDocument(id: string, document: PosterDocument | null): void {
+  try {
+    if (document) {
+      localStorage.setItem(documentKey(id), JSON.stringify(document));
+    } else {
+      localStorage.removeItem(documentKey(id));
+    }
+  } catch {
+    // Storage can be unavailable or full; the session keeps working.
+  }
+}
+
+function loadProjectDocument(id: string): PosterDocument | null {
+  try {
+    const raw = localStorage.getItem(documentKey(id));
+    return raw ? (JSON.parse(raw) as PosterDocument) : null;
+  } catch {
+    return null;
+  }
+}
 
 function normalizeProject(project: Project): Project {
   return {
@@ -139,6 +170,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       previous.filter((project) => project.id !== id),
     );
     setActiveProjectId((current) => (current === id ? null : current));
+    saveProjectDocument(id, null);
+  }, []);
+
+  const updateProjectDocument = useCallback(
+    (id: string, document: PosterDocument | null) => {
+      saveProjectDocument(id, document);
+    },
+    [],
+  );
+
+  const getProjectDocument = useCallback((id: string) => {
+    return loadProjectDocument(id);
   }, []);
 
   const updateProjectSettings = useCallback(
@@ -177,6 +220,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       removeProject,
       updateProjectSettings,
       setTurnCount,
+      updateProjectDocument,
+      getProjectDocument,
     }),
     [
       projects,
@@ -186,6 +231,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       removeProject,
       updateProjectSettings,
       setTurnCount,
+      updateProjectDocument,
+      getProjectDocument,
     ],
   );
 

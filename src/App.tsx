@@ -38,9 +38,15 @@ type View = "projects" | "newProject" | "editor" | "poster";
 
 function Shell() {
   const { references, clearReferences } = useMoodboard();
-  const { setDocument } = useEditor();
-  const { activeProject, createProject, selectProject, setTurnCount } =
-    useProjects();
+  const { setDocument, document: editorDocument } = useEditor();
+  const {
+    activeProject,
+    createProject,
+    selectProject,
+    setTurnCount,
+    updateProjectDocument,
+    getProjectDocument,
+  } = useProjects();
   const { settings: globalSettings } = useSettings();
   const [view, setView] = useState<View>("projects");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -104,6 +110,23 @@ function Shell() {
   useEffect(() => {
     agentDocumentRef.current = agentDocument;
   }, [agentDocument]);
+
+  // Persist the poster document to the active project so the design
+  // survives restarts. A null document (navigation away) never clears
+  // the saved design; only project removal clears it.
+  useEffect(() => {
+    if (agentDocument && activeProject) {
+      updateProjectDocument(activeProject.id, agentDocument);
+    }
+  }, [agentDocument, updateProjectDocument]);
+
+  // Sync full-editor changes back into the agent document so the
+  // persistence effect above captures them.
+  useEffect(() => {
+    if (view === "poster" && editorDocument) {
+      setAgentDocument(editorDocument);
+    }
+  }, [view, editorDocument]);
 
   // Stream agent events into the document, the activity log, and the
   // running flag.
@@ -273,6 +296,8 @@ function Shell() {
   function handleOpenProject(projectId: string) {
     selectProject(projectId);
     resetGeneration();
+    // Restore the saved design so it survives app restarts.
+    setAgentDocument(getProjectDocument(projectId));
     setView("editor");
   }
 
@@ -287,6 +312,10 @@ function Shell() {
   function handleExitEditor() {
     setView("editor");
     resetGeneration();
+    // Keep the design on the board after the full editor closes.
+    if (activeProject) {
+      setAgentDocument(getProjectDocument(activeProject.id));
+    }
   }
 
   const inEditor = view === "editor" || view === "poster";
