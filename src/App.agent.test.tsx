@@ -53,6 +53,15 @@ function emitAgentEvent(event: AgentEvent) {
   });
 }
 
+/** Read the x and y from a translate3d transform string. */
+function parsePosition(transform: string): { x: number; y: number } {
+  const match = /translate3d\(([-\d.]+)px,\s*([-\d.]+)px/.exec(transform);
+  if (!match) {
+    throw new Error(`unexpected transform: ${transform}`);
+  }
+  return { x: Number(match[1]), y: Number(match[2]) };
+}
+
 describe("agent chat", () => {
   beforeEach(() => {
     mockedInvoke.mockReset();
@@ -346,6 +355,66 @@ describe("agent chat", () => {
     expect(bubbles[1]).toHaveTextContent("Turn 2");
     // The second turn's tool stream stays out of the first bubble.
     expect(bubbles[1]).not.toHaveTextContent("place_object ellipse");
+  });
+
+  it("shows the animated cursor while a canvas tool runs", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("Add a red circle");
+    emitAgentEvent({ kind: "turn", number: 1 });
+    expect(document.querySelector(".agent-cursor")).toBeNull();
+
+    // A canvas-affecting tool raises the cursor at its document point.
+    emitAgentEvent({
+      kind: "toolCall",
+      name: "place_object",
+      arguments: { kind: "ellipse", x: 100, y: 200 },
+    });
+    const cursor = document.querySelector(".agent-cursor");
+    expect(cursor).not.toBeNull();
+    const first = parsePosition((cursor as HTMLElement).style.transform);
+    expect(first.x).not.toBe(0);
+
+    // A later tool at a new point moves the cursor by the coordinate
+    // delta on both axes, so it tracks the document point.
+    emitAgentEvent({
+      kind: "toolCall",
+      name: "move_object",
+      arguments: { id: "ag-1", x: 200, y: 300 },
+    });
+    const second = parsePosition(
+      (document.querySelector(".agent-cursor") as HTMLElement).style
+        .transform,
+    );
+    expect(second.x - first.x).toBeCloseTo(second.y - first.y, 5);
+
+    // The run end removes the cursor.
+    emitAgentEvent({ kind: "done", summary: "Finished." });
+    expect(document.querySelector(".agent-cursor")).toBeNull();
+  });
+
+  it("keeps the cursor hidden for a run error", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        throw "completion model is not configured";
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("make it");
+    expect(await screen.findByText("completion model is not configured")).toBeInTheDocument();
+    expect(document.querySelector(".agent-cursor")).toBeNull();
   });
 
   it("records a failed tool result from the guardrail", async () => {

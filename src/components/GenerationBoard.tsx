@@ -13,6 +13,8 @@ interface GenerationBoardProps {
   posterSize: { width: number; height: number } | null;
   /** The live poster document the agent edits, when an agent run is active. */
   document?: PosterDocument | null;
+  /** The animated agent cursor, in document coordinates. */
+  cursor?: { x: number; y: number; stamp: number } | null;
   /** Space reserved at the bottom so the island never hides the poster. */
   bottomInset: number;
   /** Reports the current zoom level so the host can show it in the navbar. */
@@ -28,6 +30,7 @@ export function GenerationBoard({
   boardRef,
   posterSize,
   document,
+  cursor,
   bottomInset,
   onZoomChange,
 }: GenerationBoardProps) {
@@ -38,6 +41,9 @@ export function GenerationBoard({
     null,
   );
   posterRectRef.current = posterSize;
+  const agentCursorRef = useRef(cursor);
+  agentCursorRef.current = cursor;
+  const agentCursorElRef = useRef<HTMLDivElement | null>(null);
 
   const drawRef = useRef<() => void>(() => {});
   const board = useBoardViewport(boardRef, {
@@ -48,6 +54,41 @@ export function GenerationBoard({
       maxFps: settings?.maxFps ?? 60,
     },
   });
+
+  // Park the animated cursor over the current document point, using the
+  // same fit, zoom, and pan transform as the canvas draw path.
+  const placeAgentCursor = () => {
+    const element = agentCursorElRef.current;
+    const target = agentCursorRef.current;
+    if (!element || !target) {
+      return;
+    }
+    const size = document ?? posterSize;
+    if (!size) {
+      return;
+    }
+    const vp = board.viewport;
+    const scale = vp.baseFit * vp.zoom;
+    const x =
+      vp.panX +
+      (vp.contentW - size.width * scale) / 2 +
+      vp.sheetX * scale +
+      target.x * scale;
+    const y =
+      vp.panY +
+      (vp.contentH - size.height * scale) / 2 +
+      vp.sheetY * scale +
+      target.y * scale;
+    element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  };
+
+  // Reposition the cursor right after it mounts; the draw path keeps
+  // it in sync while the user pans or zooms.
+  useEffect(() => {
+    if (cursor) {
+      placeAgentCursor();
+    }
+  }, [cursor]);
 
   // Repaint the board: the poster frame, or the generated poster when a
   // result exists, laid out through the shared fit, zoom, and pan. The
@@ -129,6 +170,7 @@ export function GenerationBoard({
         scale,
         sheetSelectedRef.current,
       );
+      placeAgentCursor();
       return;
     }
 
@@ -181,6 +223,7 @@ export function GenerationBoard({
         scale,
         sheetSelectedRef.current,
       );
+      placeAgentCursor();
     }
   }, [board, document, posterSize]);
   drawRef.current = draw;
@@ -296,7 +339,16 @@ export function GenerationBoard({
     };
   }, [board]);
 
-  return null;
+  return cursor ? (
+    <div
+      ref={agentCursorElRef}
+      className="agent-cursor"
+      aria-hidden="true"
+    >
+      <span key={cursor.stamp} className="agent-cursor-ring" />
+      <span key={`dot-${cursor.stamp}`} className="agent-cursor-dot" />
+    </div>
+  ) : null;
 }
 
 function roundRectPath(

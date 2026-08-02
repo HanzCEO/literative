@@ -23,6 +23,7 @@ import {
 } from "./state/posterDocument";
 import { errorMessage } from "./lib/generation";
 import {
+  cursorPositionForTool,
   listenAgentEvents,
   referencePayloads,
   runAgent,
@@ -56,6 +57,15 @@ function Shell() {
   const messageIdRef = useRef(0);
   const itemIdRef = useRef(0);
   const lastTurnNumberRef = useRef(0);
+  // The animated cursor over the board while a canvas tool runs.
+  const [agentCursor, setAgentCursor] = useState<{
+    x: number;
+    y: number;
+    stamp: number;
+  } | null>(null);
+  const cursorStampRef = useRef(0);
+  // The latest agent document, readable inside the event listener.
+  const agentDocumentRef = useRef<PosterDocument | null>(null);
 
   function appendMessage(message: Omit<AgentChatMessage, "id">) {
     messageIdRef.current += 1;
@@ -91,6 +101,11 @@ function Shell() {
     });
   }
 
+  // Keep a ref of the latest agent document for the event listener.
+  useEffect(() => {
+    agentDocumentRef.current = agentDocument;
+  }, [agentDocument]);
+
   // Stream agent events into the document, the activity log, and the
   // running flag.
   useEffect(() => {
@@ -116,6 +131,22 @@ function Shell() {
               event.arguments,
             )}`,
           });
+          // A canvas-affecting tool raises the animated cursor.
+          {
+            const position = cursorPositionForTool(
+              event.name,
+              event.arguments,
+              agentDocumentRef.current,
+            );
+            if (position) {
+              cursorStampRef.current += 1;
+              setAgentCursor({
+                x: position.x,
+                y: position.y,
+                stamp: cursorStampRef.current,
+              });
+            }
+          }
           break;
         case "toolResult":
           appendTurnItem({
@@ -138,14 +169,17 @@ function Shell() {
         case "done":
           appendTurnItem({ kind: "done", text: event.summary });
           setAgentRunning(false);
+          setAgentCursor(null);
           break;
         case "stopped":
           appendTurnItem({ kind: "stopped", text: "Stopped by user" });
           setAgentRunning(false);
+          setAgentCursor(null);
           break;
         case "error":
           appendTurnItem({ kind: "error", text: event.message });
           setAgentRunning(false);
+          setAgentCursor(null);
           break;
       }
     };
@@ -165,6 +199,7 @@ function Shell() {
     setAgentChat([]);
     setAgentRunning(false);
     setAgentStarted(false);
+    setAgentCursor(null);
     messageIdRef.current = 0;
     itemIdRef.current = 0;
     lastTurnNumberRef.current = 0;
@@ -177,6 +212,7 @@ function Shell() {
     }
     setAgentRunning(true);
     setAgentStarted(true);
+    setAgentCursor(null);
     appendMessage({ kind: "user", prompt });
     try {
       const payloads = await referencePayloads(references);
@@ -203,6 +239,7 @@ function Shell() {
     } catch (err) {
       appendTurnItem({ kind: "error", text: errorMessage(err) });
       setAgentRunning(false);
+      setAgentCursor(null);
     }
   }
 
@@ -352,6 +389,7 @@ function Shell() {
           boardRef={boardRef}
           posterSize={activeProject?.posterSize ?? null}
           document={agentDocument}
+          cursor={agentCursor}
           bottomInset={boardBottomInset}
           onZoomChange={setPreviewZoom}
         />

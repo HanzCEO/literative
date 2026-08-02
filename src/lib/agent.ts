@@ -106,3 +106,44 @@ export function summarizeToolArguments(name: string, args: unknown): string {
       return JSON.stringify(value);
   }
 }
+
+/**
+ * The document point where a canvas-affecting tool works, for the
+ * animated agent cursor. Tools without coordinates focus their target
+ * layer, or the poster center as the last resort.
+ */
+export function cursorPositionForTool(
+  name: string,
+  args: unknown,
+  document: PosterDocument | null,
+): { x: number; y: number } | null {
+  const value = (args ?? {}) as Record<string, unknown>;
+  const width = document?.width ?? 1024;
+  const height = document?.height ?? 1536;
+  const center = { x: width / 2, y: height / 2 };
+  if (name === "place_object" || name === "move_object") {
+    const x = typeof value.x === "number" ? value.x : Number.NaN;
+    const y = typeof value.y === "number" ? value.y : Number.NaN;
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      return { x, y };
+    }
+    return center;
+  }
+  if (name === "generate_image") {
+    return center;
+  }
+  if (
+    name === "delete_object" ||
+    name === "rotate_object" ||
+    name === "edit_object_property"
+  ) {
+    const id = typeof value.id === "string" ? value.id : null;
+    if (id && document) {
+      const layer = document.layers.find((item) => item.id === id);
+      if (layer) {
+        return { x: layer.x, y: layer.y };
+      }
+    }
+  }
+  return center;
+}
