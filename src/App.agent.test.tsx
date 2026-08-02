@@ -192,6 +192,88 @@ describe("agent chat", () => {
     );
   });
 
+  it("scrolls the chat to the bottom when a new line streams in", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+
+    const list = document.querySelector(".agent-activity") as HTMLElement;
+    Object.defineProperty(list, "scrollHeight", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(list, "clientHeight", {
+      value: 200,
+      configurable: true,
+    });
+    list.scrollTop = 0;
+
+    emitAgentEvent({
+      kind: "toolResult",
+      name: "place_object",
+      ok: true,
+      detail: "placed ellipse as ag-1",
+    });
+    // Pinned to the bottom: the newest line pulled the list down.
+    expect(list.scrollTop).toBe(600);
+  });
+
+  it("keeps the chat position when the user has scrolled up", async () => {
+    mockedInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_app_settings") {
+        return null;
+      }
+      if (command === "agent_run") {
+        return { document: null, events: [] };
+      }
+      return null;
+    });
+    await openEditor();
+    await submitPrompt("A jazz poster");
+    emitAgentEvent({ kind: "turn", number: 1 });
+
+    const list = document.querySelector(".agent-activity") as HTMLElement;
+    Object.defineProperty(list, "scrollHeight", {
+      value: 600,
+      configurable: true,
+    });
+    Object.defineProperty(list, "clientHeight", {
+      value: 200,
+      configurable: true,
+    });
+    list.scrollTop = 0;
+    fireEvent.scroll(list);
+
+    emitAgentEvent({
+      kind: "toolResult",
+      name: "place_object",
+      ok: true,
+      detail: "placed ellipse as ag-1",
+    });
+    // The user is reading older lines; new activity must not yank them.
+    expect(list.scrollTop).toBe(0);
+
+    // Scrolling back to the bottom re-pins the list.
+    list.scrollTop = 400;
+    fireEvent.scroll(list);
+    emitAgentEvent({
+      kind: "toolResult",
+      name: "place_object",
+      ok: true,
+      detail: "placed text as ag-2",
+    });
+    expect(list.scrollTop).toBe(600);
+  });
+
   it("streams tool activity and applies the document", async () => {
     mockedInvoke.mockImplementation(async (command: string) => {
       if (command === "get_app_settings") {

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   PencilSimple,
   Stop,
@@ -34,6 +35,25 @@ export function AgentConsole({
   onEdit,
   canEdit = false,
 }: AgentConsoleProps) {
+  const listRef = useRef<HTMLUListElement>(null);
+  // True while the user is scrolled near the bottom; only then does a
+  // new bubble pull the list down to the newest line.
+  const stickToBottomRef = useRef(true);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !stickToBottomRef.current) return;
+    list.scrollTop = list.scrollHeight;
+  }, [chat]);
+
+  function handleScroll() {
+    const list = listRef.current;
+    if (!list) return;
+    const distanceFromBottom =
+      list.scrollHeight - list.scrollTop - list.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 48;
+  }
+
   const showEdit = canEdit && !running;
   const showStop = running;
   return (
@@ -64,7 +84,12 @@ export function AgentConsole({
           )}
         </div>
       )}
-      <ul className="agent-activity" aria-label="Agent activity">
+      <ul
+        ref={listRef}
+        className="agent-activity"
+        aria-label="Agent activity"
+        onScroll={handleScroll}
+      >
         {chat.map((message) =>
           message.kind === "user" ? (
             <li key={message.id} className="agent-bubble agent-bubble-user">
