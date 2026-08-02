@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod ai_client;
 pub mod image_core;
 pub mod poster;
@@ -5,7 +6,7 @@ pub mod settings;
 
 use ai_client::ReferencePayload;
 use image_core::{ImageCoreError, Result};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Decode image bytes and return a downscaled PNG preview as a data URL.
 ///
@@ -170,6 +171,42 @@ fn export_poster_to_file(
     Ok(path)
 }
 
+/// Run the design agent loop. Events stream to the "agent-event"
+/// channel while the loop runs; the return value carries the final
+/// document and the full event log.
+#[tauri::command]
+async fn agent_run(
+    app: tauri::AppHandle,
+    request: agent::AgentRequest,
+) -> std::result::Result<agent::AgentOutcome, String> {
+    let stop = agent::register_stop_flag();
+    let completion = request.settings.completion.clone();
+    let app_clone = app.clone();
+    let emit = move |event: &agent::AgentEvent| {
+        let _ = app_clone.emit("agent-event", event);
+    };
+    let outcome = agent::run_agent(
+        request,
+        stop,
+        agent::MAX_TURNS,
+        emit,
+        move |chat_request| {
+            let config = completion.clone();
+            async move { ai_client::chat::complete(&config, chat_request).await }
+        },
+        ai_client::generate,
+    )
+    .await;
+    agent::clear_stop_flag();
+    outcome.map_err(|err| err.to_string())
+}
+
+/// Ask the running agent to stop after its current tool call.
+#[tauri::command]
+fn agent_stop() {
+    agent::request_stop();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -187,6 +224,8 @@ pub fn run() {
             export_poster_to_file,
             get_app_settings,
             save_app_settings,
+            agent_run,
+            agent_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
