@@ -422,9 +422,12 @@ export function useBoardViewport(
 
   // Blit the cached snapshot at the current pan offset and repaint the
   // exposed strips. Returns false when there is no usable cache.
-  // Blit the cached snapshot at the current pan offset. The offset is
-  // scaled by the device pixel ratio so the drag position matches the
-  // full-resolution repaint that runs on release, on any screen scale.
+  // Blit the cached snapshot at the current pan offset, then re-render
+  // the strips the snapshot no longer covers so objects that were cut
+  // off at the viewport edge come fully into view during the drag. The
+  // offset is scaled by the device pixel ratio so the drag position
+  // matches the full-resolution repaint that runs on release, on any
+  // screen scale. Returns false when there is no usable cache.
   function paintPanCache(): boolean {
     const canvas = canvasRef.current;
     const cache = panCacheRef.current;
@@ -436,17 +439,45 @@ export function useBoardViewport(
       return false;
     }
     const dpr = state.dpr;
+    const dx = (state.panX - panStartRef.current.x) * dpr;
+    const dy = (state.panY - panStartRef.current.y) * dpr;
+    const width = canvas.width;
+    const height = canvas.height;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.fillStyle = boardBackground();
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(
-      cache,
-      (state.panX - panStartRef.current.x) * dpr,
-      (state.panY - panStartRef.current.y) * dpr,
-      canvas.width,
-      canvas.height,
-    );
+    context.fillRect(0, 0, width, height);
+    context.drawImage(cache, dx, dy, width, height);
+    // The snapshot covers the canvas shifted by (dx, dy); the strips it
+    // misses on the leading edges are at most two, one per axis.
+    if (dx > 0) {
+      repaintStrip(context, 0, 0, dx, height);
+    } else if (dx < 0) {
+      repaintStrip(context, width + dx, 0, -dx, height);
+    }
+    if (dy > 0) {
+      repaintStrip(context, 0, 0, width, dy);
+    } else if (dy < 0) {
+      repaintStrip(context, 0, height + dy, width, -dy);
+    }
     return true;
+  }
+
+  // Re-render the scene clipped to one exposed strip. The clip bounds
+  // the expensive full redraw to the strip pixels only, keeping the pan
+  // inside the frame budget.
+  function repaintStrip(
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ) {
+    context.save();
+    context.beginPath();
+    context.rect(x, y, w, h);
+    context.clip();
+    redrawRef.current();
+    context.restore();
   }
 
   function endPan() {

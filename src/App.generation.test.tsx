@@ -19,22 +19,23 @@ const mockedInvoke = vi.mocked(invoke);
 function recordCanvasContext() {
   const blits: number[][] = [];
   const transforms: number[][] = [];
+  const rects: number[][] = [];
+  const clips: number[][] = [];
   const target: Record<string, unknown> = {
     drawImage: (...args: unknown[]) => blits.push(args as number[]),
     setTransform: (...args: number[]) => transforms.push(args),
+    rect: (...args: number[]) => rects.push(args),
+    clip: (...args: number[]) => clips.push(args),
   };
   const stub = new Proxy(target, {
     get(_, prop) {
       if (prop === "canvas") {
         return { width: 300, height: 150 };
       }
-      if (prop === "drawImage") {
-        return target.drawImage;
+      if (typeof prop === "string" && prop in target) {
+        return target[prop];
       }
-      if (prop === "setTransform") {
-        return target.setTransform;
-      }
-      if (typeof prop === "string" && !(prop in target)) {
+      if (typeof prop === "string") {
         target[prop] = () => {};
       }
       return target[prop as string];
@@ -47,7 +48,7 @@ function recordCanvasContext() {
   const spy = vi
     .spyOn(HTMLCanvasElement.prototype, "getContext")
     .mockReturnValue(stub);
-  return { blits, transforms, spy };
+  return { blits, transforms, rects, clips, spy };
 }
 
 /** Offset of the latest pan blit: drawImage(cache, dx, dy, w, h). */
@@ -255,6 +256,37 @@ describe("generation flow", () => {
         value: 1,
         configurable: true,
       });
+    }
+  });
+
+  it("re-renders the exposed strip so cut-off objects come into view", async () => {
+    const { blits, rects, clips, spy } = recordCanvasContext();
+    await openEditor();
+    const canvas = document.querySelector(".canvas-area")!;
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(canvas, {
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      fireEvent.pointerMove(canvas, {
+        clientX: 130,
+        clientY: 100,
+        button: 0,
+        pointerId: 1,
+      });
+      vi.advanceTimersByTime(16);
+      // The pan still blits the snapshot 1:1...
+      expect(lastBlitOffset(blits)).toBeCloseTo(30, 5);
+      // ...and re-renders the 30px strip the snapshot no longer covers
+      // on the left edge instead of leaving bare background.
+      expect(rects).toContainEqual([0, 0, 30, 150]);
+      expect(clips.length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
     }
   });
 
