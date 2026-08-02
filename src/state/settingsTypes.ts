@@ -31,6 +31,15 @@ export interface GlobalSettings {
   /** Target repaint rate when vsync is off. */
   maxFps: number;
   params: GenerationParams;
+  /** Completion model settings for the design agent. */
+  completion: CompletionSettings;
+}
+
+/** Configuration of the completion model that drives the agent. */
+export interface CompletionSettings {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
 }
 
 /** Generation settings stored on a single project. */
@@ -81,6 +90,11 @@ export function defaultGlobalSettings(): GlobalSettings {
     vsync: true,
     maxFps: 60,
     params: { ...PRESET_PARAMS.krea_2_turbo },
+    completion: {
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      model: "",
+    },
   };
 }
 

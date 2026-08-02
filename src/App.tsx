@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cactus, GearSix } from "@phosphor-icons/react";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -8,13 +8,27 @@ import { GenerationBoard } from "./components/GenerationBoard";
 import { EditorScreen } from "./components/editor/EditorScreen";
 import { ProjectListPage } from "./components/ProjectListPage";
 import { NewProjectPage } from "./components/NewProjectPage";
+import { AgentConsole, type AgentActivityItem } from "./components/AgentConsole";
 import { MoodboardProvider, useMoodboard } from "./state/MoodboardContext";
 import { SettingsProvider, useSettings } from "./state/SettingsContext";
 import { EditorProvider, useEditor } from "./state/EditorContext";
 import { ProjectsProvider, useProjects } from "./state/ProjectsContext";
-import { createDocumentFromImage, createDocumentWithImage } from "./state/posterDocument";
+import {
+  createDocument,
+  createDocumentFromImage,
+  createDocumentWithImage,
+  type PosterDocument,
+} from "./state/posterDocument";
 import { errorMessage, generatePoster, type GeneratedPoster } from "./lib/generation";
-import { defaultProjectSettings } from "./state/settingsTypes";
+import {
+  listenAgentEvents,
+  referencePayloads,
+  runAgent,
+  stopAgent,
+  summarizeToolArguments,
+  type AgentEvent,
+} from "./lib/agent";
+import { defaultGlobalSettings, defaultProjectSettings } from "./state/settingsTypes";
 import "./App.css";
 
 type View = "projects" | "newProject" | "editor" | "poster";
@@ -33,6 +47,126 @@ function Shell() {
   const [backHovered, setBackHovered] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const boardRef = useRef<HTMLCanvasElement | null>(null);
+  const [agentDocument, setAgentDocument] = useState<PosterDocument | null>(
+    null,
+  );
+  const [agentRunning, setAgentRunning] = useState(false);
+  const [agentActivity, setAgentActivity] = useState<AgentActivityItem[]>([]);
+  const activityIdRef = useRef(0);
+
+  function appendActivity(item: Omit<AgentActivityItem, "id">) {
+    activityIdRef.current += 1;
+    const id = activityIdRef.current;
+    setAgentActivity((current) => [...current, { id, ...item }]);
+  }
+
+  // Stream agent events into the document, the activity log, and the
+  // running flag.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    const handleEvent = (event: AgentEvent) => {
+      if (disposed) {
+        return;
+      }
+      switch (event.kind) {
+        case "document":
+          setAgentDocument(event.document);
+          break;
+        case "turn":
+          appendActivity({
+            kind: "turn",
+            text: `Turn ${event.number}`,
+          });
+          break;
+        case "toolCall":
+          appendActivity({
+            kind: "tool",
+            text: `${event.name} ${summarizeToolArguments(
+              event.name,
+              event.arguments,
+            )}`,
+          });
+          break;
+        case "toolResult":
+          appendActivity({
+            kind: "result",
+            ok: event.ok,
+            text: event.ok
+              ? `${event.name}: ${event.detail}`
+              : `${event.name} failed: ${event.detail}`,
+          });
+          break;
+        case "imageProgress":
+          appendActivity({ kind: "image", text: "Generating image..." });
+          break;
+        case "imageAdded":
+          appendActivity({
+            kind: "image",
+            text: `Image added (${event.width} x ${event.height})`,
+          });
+          break;
+        case "done":
+          appendActivity({ kind: "done", text: event.summary });
+          setAgentRunning(false);
+          break;
+        case "stopped":
+          appendActivity({ kind: "stopped", text: "Stopped by user" });
+          setAgentRunning(false);
+          break;
+        case "error":
+          appendActivity({ kind: "error", text: event.message });
+          setAgentRunning(false);
+          break;
+      }
+    };
+    void listenAgentEvents(handleEvent).then((stop) => {
+      unlisten = stop;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  function resetAgentState() {
+    setAgentDocument(null);
+    setAgentActivity([]);
+    setAgentRunning(false);
+  }
+
+  async function handleAgentRun(prompt: string) {
+    const size = activeProject?.posterSize;
+    if (!size) {
+      return;
+    }
+    setGenerating(false);
+    setError(null);
+    setResult(null);
+    setAgentRunning(true);
+    try {
+      const payloads = await referencePayloads(references);
+      const params =
+        activeProject?.settings.params ?? defaultProjectSettings().params;
+      const base = agentDocument ?? createDocument(size.width, size.height);
+      const outcome = await runAgent({
+        prompt,
+        document: base,
+        settings: globalSettings ?? defaultGlobalSettings(),
+        params,
+        references: payloads,
+      });
+      setAgentDocument(outcome.document);
+      setAgentRunning(false);
+    } catch (err) {
+      appendActivity({ kind: "error", text: errorMessage(err) });
+      setAgentRunning(false);
+    }
+  }
+
+  function handleAgentStop() {
+    void stopAgent().catch(() => undefined);
+  }
 
   function resetGeneration() {
     setResult(null);
@@ -56,12 +190,14 @@ function Shell() {
     });
     selectProject(project.id);
     resetGeneration();
+    resetAgentState();
     setView("editor");
   }
 
   function handleOpenProject(projectId: string) {
     selectProject(projectId);
     resetGeneration();
+    resetAgentState();
     setView("editor");
   }
 
@@ -86,24 +222,27 @@ function Shell() {
   }
 
   function handleEdit() {
-    if (!result) {
-      return;
-    }
-    const size = activeProject?.posterSize;
-    if (size) {
-      setDocument(
-        createDocumentWithImage(
-          size.width,
-          size.height,
-          result.width,
-          result.height,
-          result.dataUrl,
-        ),
-      );
+    if (agentDocument) {
+      setDocument(agentDocument);
+    } else if (result) {
+      const size = activeProject?.posterSize;
+      if (size) {
+        setDocument(
+          createDocumentWithImage(
+            size.width,
+            size.height,
+            result.width,
+            result.height,
+            result.dataUrl,
+          ),
+        );
+      } else {
+        setDocument(
+          createDocumentFromImage(result.width, result.height, result.dataUrl),
+        );
+      }
     } else {
-      setDocument(
-        createDocumentFromImage(result.width, result.height, result.dataUrl),
-      );
+      return;
     }
     setView("poster");
   }
@@ -213,10 +352,22 @@ function Shell() {
           result={result}
           error={error}
           posterSize={activeProject?.posterSize ?? null}
+          document={agentDocument}
           bottomInset={boardBottomInset}
           onEdit={handleEdit}
           onDismiss={handleDismiss}
           onZoomChange={setPreviewZoom}
+        />
+      )}
+      {view === "editor" && (
+        <AgentConsole
+          running={agentRunning}
+          activity={agentActivity}
+          onRun={(prompt) => void handleAgentRun(prompt)}
+          onStop={handleAgentStop}
+          onEdit={handleEdit}
+          canEdit={agentDocument !== null}
+          disabled={!activeProject}
         />
       )}
       {view === "editor" && (

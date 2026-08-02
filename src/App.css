@@ -1341,3 +1341,170 @@ select option {
 .poster-preset-card-active .poster-preset-hint {
   color: var(--accent);
 }
+
+/* ---- Agent console ---- */
+
+.agent-console {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(46vh, 430px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  z-index: 29;
+}
+
+.agent-console-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-stop {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.agent-stop:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.agent-activity {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px;
+  overflow-y: auto;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.agent-activity-empty {
+  color: var(--text-muted);
+}
+
+.agent-line-turn {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.agent-line-tool {
+  color: var(--accent);
+}
+
+.agent-line-fail {
+  color: #e5484d;
+}
+
+.agent-line-done {
+  color: var(--text);
+}
+
+.agent-line-error {
+  color: #e5484d;
+}
+
+.agent-line-stopped {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.agent-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.agent-input::placeholder {
+  color: var(--text-muted);
+}
+
+.agent-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.agent-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.agent-submit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.agent-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.agent-edit {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.agent-edit:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}

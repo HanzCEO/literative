@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { PencilSimple, X } from "@phosphor-icons/react";
+import { drawLayer } from "../lib/drawLayers";
 import { loadImage } from "../lib/file";
 import type { GeneratedPoster } from "../lib/generation";
+import type { PosterDocument } from "../state/posterDocument";
 import { useSettings } from "../state/SettingsContext";
 import { FIT_PADDING, useBoardViewport } from "./editor/useBoardViewport";
 
@@ -13,6 +15,8 @@ interface GenerationBoardProps {
   result: GeneratedPoster | null;
   error: string | null;
   posterSize: { width: number; height: number } | null;
+  /** The live poster document the agent edits, when an agent run is active. */
+  document?: PosterDocument | null;
   /** Space reserved at the bottom so the island never hides the poster. */
   bottomInset: number;
   onEdit: () => void;
@@ -31,12 +35,14 @@ export function GenerationBoard({
   result,
   error,
   posterSize,
+  document,
   bottomInset,
   onEdit,
   onDismiss,
   onZoomChange,
 }: GenerationBoardProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const layerImagesRef = useRef(new Map<string, HTMLImageElement>());
   const { settings } = useSettings();
   const sheetSelectedRef = useRef(false);
   const posterRectRef = useRef<{ width: number; height: number } | null>(
@@ -74,6 +80,70 @@ export function GenerationBoard({
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.fillStyle = boardBackground();
     context.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (document) {
+      // The live agent document: the sheet with its layers on top.
+      const scale = vp.baseFit * vp.zoom;
+      const offsetX =
+        vp.panX +
+        (vp.contentW - document.width * scale) / 2 +
+        vp.sheetX * scale;
+      const offsetY =
+        vp.panY +
+        (vp.contentH - document.height * scale) / 2 +
+        vp.sheetY * scale;
+      context.setTransform(
+        vp.dpr * scale,
+        0,
+        0,
+        vp.dpr * scale,
+        vp.dpr * offsetX,
+        vp.dpr * offsetY,
+      );
+      context.save();
+      context.shadowColor = "rgba(0, 0, 0, 0.30)";
+      context.shadowBlur = vp.interacting ? 0 : 24 * scale;
+      context.shadowOffsetY = vp.interacting ? 0 : 8 * scale;
+      roundRectPath(
+        context,
+        0,
+        0,
+        document.width,
+        document.height,
+        POSTER_RADIUS,
+      );
+      context.fillStyle = "#ffffff";
+      context.fill();
+      context.restore();
+      drawBorder(
+        context,
+        0,
+        0,
+        document.width,
+        document.height,
+        POSTER_RADIUS,
+        1 / scale,
+      );
+      for (const layer of document.layers) {
+        if (!layer.visible) {
+          continue;
+        }
+        drawLayer(
+          context,
+          layer,
+          (src) => layerImagesRef.current.get(src),
+          false,
+        );
+      }
+      drawSheetSelection(
+        context,
+        document.width,
+        document.height,
+        scale,
+        sheetSelectedRef.current,
+      );
+      return;
+    }
 
     if (result) {
       const image = imageRef.current;
@@ -195,6 +265,15 @@ export function GenerationBoard({
             (contentH - FIT_PADDING * 2 - bottomInset) / result.height,
           ),
       );
+    } else if (document) {
+      board.setContent(document.width, document.height);
+      board.setFitCalc(
+        (contentW, contentH) =>
+          Math.min(
+            (contentW - FIT_PADDING * 2) / document.width,
+            (contentH - FIT_PADDING * 2 - bottomInset) / document.height,
+          ),
+      );
     } else if (posterSize) {
       board.setContent(posterSize.width, posterSize.height);
       board.setFitCalc(
@@ -207,7 +286,7 @@ export function GenerationBoard({
       );
     }
     drawRef.current();
-  }, [board, result, posterSize, bottomInset]);
+  }, [board, result, document, posterSize, bottomInset]);
 
   // Load the generated image once and repaint when it is ready.
   useEffect(() => {
@@ -227,6 +306,32 @@ export function GenerationBoard({
       cancelled = true;
     };
   }, [result, board]);
+
+  // Load image layers of the agent document and repaint when ready.
+  useEffect(() => {
+    if (!document) {
+      return;
+    }
+    let cancelled = false;
+    const pending = document.layers
+      .filter((layer) => layer.visible && layer.kind === "image")
+      .map(async (layer) => {
+        if (layer.kind !== "image") {
+          return;
+        }
+        if (!layerImagesRef.current.has(layer.src)) {
+          layerImagesRef.current.set(layer.src, await loadImage(layer.src));
+        }
+      });
+    void Promise.all(pending).then(() => {
+      if (!cancelled) {
+        drawRef.current();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [document, board]);
 
   // The preview has no layer editing: Space plus the left button pans
   // the viewport, and dragging the poster sheet itself moves it on the
