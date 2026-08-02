@@ -11,6 +11,8 @@ const CHROME_SELECTOR = [
   ".app-header",
   ".island",
   ".result-overlay",
+  ".dialog-overlay",
+  "[role=\"dialog\"]",
 ].join(", ");
 
 /** Read the theme background color so the board matches the app chrome. */

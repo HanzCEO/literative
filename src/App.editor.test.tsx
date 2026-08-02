@@ -492,6 +492,19 @@ describe("poster editor", () => {
     expect(rows[0]).not.toHaveClass("layer-row-selected");
   });
 
+  it("does not zoom while the settings dialog is open", async () => {
+    await enterEditor();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open settings" }),
+    );
+    const dialog = screen.getByRole("dialog");
+    fireEvent.wheel(dialog, { deltaY: -100 });
+    // The wheel over the modal scrolls it; it must not zoom the board.
+    expect(screen.getByLabelText("Zoom level")).toHaveTextContent(
+      "Zoom 100%",
+    );
+  });
+
   it("returns to the island view with Done", async () => {
     const user = userEvent.setup();
     await enterEditor();
